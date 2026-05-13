@@ -5,7 +5,7 @@ class BookingSource extends Equatable {
     required this.id,
     required this.propertyId,
     required this.name,
-    required this.bookingTypeId,
+    this.bookingTypeId,
     required this.sortOrder,
     required this.isActive,
   });
@@ -13,7 +13,8 @@ class BookingSource extends Equatable {
   final String id;
   final String propertyId;
   final String name;
-  final String bookingTypeId;
+  // nullable: ON DELETE SET NULL in DB schema
+  final String? bookingTypeId;
   final int sortOrder;
   final bool isActive;
 
@@ -22,12 +23,13 @@ class BookingSource extends Equatable {
       id: json['id'] as String,
       propertyId: json['property_id'] as String,
       name: json['name'] as String,
-      bookingTypeId: json['booking_type_id'] as String,
+      bookingTypeId: json['booking_type_id'] as String?,
       sortOrder: json['sort_order'] as int,
       isActive: json['is_active'] as bool,
     );
   }
 
   @override
-  List<Object?> get props => [id, propertyId, name, bookingTypeId, sortOrder, isActive];
+  List<Object?> get props =>
+      [id, propertyId, name, bookingTypeId, sortOrder, isActive];
 }

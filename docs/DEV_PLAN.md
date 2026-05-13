@@ -88,17 +88,17 @@ Both PINs work. Role-based nav renders correctly. Route guard blocks staff from 
 
 - [x] `Room`, `BookingType`, `BookingSource` models (with `fromJson`, extend `Equatable`)
 - [x] `ConfigRepository` — `fetchRooms()`, `fetchBookingTypes()`, `fetchBookingSources()`
-  - All queries filter: `is_active=eq.true`, `property_id=eq.<id>`, `order=sort_order.asc`
+- [x] All queries filter: `is_active=eq.true`, `property_id=eq.<id>`, `order=sort_order.asc`
 - [x] `ConfigCubit` + states (`ConfigLoading`, `ConfigLoaded`, `ConfigError`)
 - [x] `ConfigCubit` provided at app root (above navigator)
 - [x] Post-auth trigger — `BlocListener` on `AuthCubit` calls `ConfigCubit.loadConfig()` on `AuthAuthenticated`
 - [x] `ConfigError` state shows a retry UI (not a blank screen)
 
 ### Test Checklist
-- [ ] After PIN entry, config loads without error
-- [ ] `ConfigLoaded` state contains 5 rooms, 3 booking types, 5 OTA sources
-- [ ] Killing network before PIN entry → `ConfigError` state renders retry option
-- [ ] Retry succeeds when network restored
+- [x] After PIN entry, config loads without error
+- [x] `ConfigLoaded` state contains 5 rooms, 3 booking types, 5 OTA sources
+- [x] Killing network before PIN entry → `ConfigError` state renders retry option
+- [x] Retry succeeds when network restored
 
 ### Definition of Done
 Config loads for both roles after auth. Cached in `ConfigCubit` for the session.
@@ -112,41 +112,41 @@ Config loads for both roles after auth. Cached in `ConfigCubit` for the session.
 ### Tasks
 
 **Models**
-- [ ] `BookingGroup` model (with `fromJson`, extend `Equatable`)
-- [ ] `BookingDay` model
-- [ ] `BookingGroupInput` — input DTO for new/edit saves
+- [x] `BookingGroup` model (with `fromJson`, extend `Equatable`)
+- [x] `BookingDay` model
+- [x] `BookingGroupInput` — input DTO for new/edit saves
 
 **Repository**
-- [ ] `BookingRepository.checkConflicts(roomId, List<DateTime> nights)` — returns list of conflicting dates
-- [ ] `BookingRepository.saveBookingGroup(input)` — INSERT `booking_groups` → get id → INSERT `booking_days` array
-- [ ] `BookingRepository.softDeleteConflicts(roomId, dates)` — PATCH `is_active=false`, cascade to parent group if all days inactive
+- [x] `BookingRepository.checkConflicts(roomId, List<DateTime> nights)` — returns list of conflicting dates
+- [x] `BookingRepository.saveBookingGroup(input)` — INSERT `booking_groups` → get id → INSERT `booking_days` array
+- [x] `BookingRepository.softDeleteConflicts(roomId, dates)` — PATCH `is_active=false`, cascade to parent group if all days inactive
 
 **Cubit**
-- [ ] `BookingCubit` + states (`BookingIdle`, `BookingChecking`, `BookingConflict`, `BookingSaving`, `BookingSaved`, `BookingError`)
-- [ ] `checkAndSave()` → conflict check → if clear, save; if conflicts, emit `BookingConflict`
-- [ ] `confirmOverwrite()` → soft-delete conflicts → save
+- [x] `BookingCubit` + states (`BookingIdle`, `BookingChecking`, `BookingConflict`, `BookingSaving`, `BookingSaved`, `BookingError`)
+- [x] `checkAndSave()` → conflict check → if clear, save; if conflicts, emit `BookingConflict`
+- [x] `confirmOverwrite()` → soft-delete conflicts → save
 
 **UI**
-- [ ] `BookingForm` widget — bottom sheet, all fields (see CLAUDE.md)
-- [ ] Room dropdown from `ConfigCubit`
-- [ ] Booking type chips (single-select) from `ConfigCubit`
-- [ ] Booking source dropdown filtered by selected type; hidden if no active sources for type
-- [ ] Nights + per-night amount computed display — updates live on date/amount change
-- [ ] Save button disabled when `amount == 0` or `check_out <= check_in`
-- [ ] Save button label: "Save booking" (new) / "Save changes" (edit)
-- [ ] `ConflictDialog` — lists conflicting dates, Cancel + Overwrite buttons
-- [ ] `EntryScreen` — opens `BookingForm` as bottom sheet
+- [x] `BookingForm` widget — bottom sheet, all fields (see CLAUDE.md)
+- [x] Room dropdown from `ConfigCubit`
+- [x] Booking type chips (single-select) from `ConfigCubit`
+- [x] Booking source dropdown filtered by selected type; hidden if no active sources for type
+- [x] Nights + per-night amount computed display — updates live on date/amount change
+- [x] Save button disabled when `amount == 0` or `check_out <= check_in`
+- [x] Save button label: "Save booking" (new) / "Save changes" (edit)
+- [x] `ConflictDialog` — lists conflicting dates, Cancel + Overwrite buttons
+- [x] `EntryScreen` — opens `BookingForm` as bottom sheet
 
 ### Test Checklist
-- [ ] Save a single-night booking → verify 1 `booking_groups` row + 1 `booking_days` row in Supabase
-- [ ] Save a 3-night booking (₹9,900) → verify 3 `booking_days` rows each with `amount=3300.00`
-- [ ] Save a booking where amount doesn't divide evenly (e.g. ₹10,000 / 3) → verify `NUMERIC(10,2)` rounding stored correctly
+- [x] Save a single-night booking → verify 1 `booking_groups` row + 1 `booking_days` row in Supabase
+- [x] Save a 3-night booking (₹9,900) → verify 3 `booking_days` rows each with `amount=3300.00`
+- [x] Save a booking where amount doesn't divide evenly (e.g. ₹10,000 / 3) → verify `NUMERIC(10,2)` rounding stored correctly
 - [ ] Attempt to save a booking on an already-booked room+date → conflict dialog appears with correct dates listed
 - [ ] Cancel conflict dialog → form stays open, no data changed
 - [ ] Confirm overwrite → old `booking_days` soft-deleted, new group inserted, form closes
-- [ ] Source dropdown hidden when "Offline" or "Direct" type selected (no sources configured)
-- [ ] Save button disabled with amount = 0
-- [ ] Save button disabled with check-out = check-in
+- [x] Source dropdown hidden when "Offline" or "Direct" type selected (no sources configured)
+- [x] Save button disabled with amount = 0
+- [x] Save button disabled with check-out = check-in
 
 ### Definition of Done
 New bookings save correctly. Conflict detection works. Overwrite flow soft-deletes correctly.
