@@ -56,26 +56,26 @@ App runs on target Android device. Supabase has seeded data. Theme compiles with
 ### Tasks
 
 **Auth**
-- [ ] `AuthCubit` + states (`AuthInitial`, `AuthAuthenticated`, `AuthError`)
-- [ ] `PINScreen` — logo, 4 dots, numpad grid
-- [ ] Auto-submit on 4th digit (no confirm button)
-- [ ] Shake animation on wrong PIN
-- [ ] Error text below numpad, auto-clear after 2s
-- [ ] `AuthCubit` provided at app root
+- [x] `AuthCubit` + states (`AuthInitial`, `AuthAuthenticated`, `AuthError`)
+- [x] `PINScreen` — logo, 4 dots, numpad grid
+- [x] Auto-submit on 4th digit (no confirm button)
+- [x] Shake animation on wrong PIN
+- [x] Error text below numpad, auto-clear after 2s
+- [x] `AuthCubit` provided at app root
 
 **Navigation**
-- [ ] `app.dart` — `go_router` with all routes (`/pin`, `/daily`, `/monthly`, `/entry`, `/settings`, `/settings/rooms`, `/settings/booking-types`, `/settings/booking-sources`)
-- [ ] Route guard — unauthenticated → `/pin`; staff → redirect `/settings/*` to `/daily`
-- [ ] `HomeShell` — bottom nav with 4 tabs (owner) / 3 tabs (staff)
-- [ ] Settings tab fully absent from widget tree for staff role
-- [ ] Placeholder screens for Daily, Monthly, Entry, Settings
+- [x] `app.dart` — `go_router` with all routes (`/pin`, `/daily`, `/monthly`, `/entry`, `/settings`, `/settings/rooms`, `/settings/booking-types`, `/settings/booking-sources`)
+- [x] Route guard — unauthenticated → `/pin`; staff → redirect `/settings/*` to `/daily`
+- [x] `HomeShell` — bottom nav with 4 tabs (owner) / 3 tabs (staff)
+- [x] Settings tab fully absent from widget tree for staff role
+- [x] Placeholder screens for Daily, Monthly, Entry, Settings
 
 ### Test Checklist
-- [ ] Owner PIN → navigates to Daily placeholder, 4-tab nav visible
-- [ ] Staff PIN → navigates to Daily placeholder, 3-tab nav visible (no Settings)
-- [ ] Wrong PIN → shake + error message → dots reset after 2s
-- [ ] Navigating to `/settings` as staff → redirected to `/daily`
-- [ ] Back button on Daily does not navigate back to PIN
+- [x] Owner PIN → navigates to Daily placeholder, 4-tab nav visible
+- [x] Staff PIN → navigates to Daily placeholder, 3-tab nav visible (no Settings)
+- [x] Wrong PIN → shake + error message → dots reset after 2s
+- [x] Navigating to `/settings` as staff → redirected to `/daily`
+- [x] Back button on Daily does not navigate back to PIN
 
 ### Definition of Done
 Both PINs work. Role-based nav renders correctly. Route guard blocks staff from settings.
