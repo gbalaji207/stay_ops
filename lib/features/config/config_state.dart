@@ -19,10 +19,18 @@ class ConfigLoading extends ConfigState {
 }
 
 class ConfigLoaded extends ConfigState {
-  const ConfigLoaded();
+  const ConfigLoaded({
+    required this.rooms,
+    required this.bookingTypes,
+    required this.bookingSources,
+  });
+
+  final List<Room> rooms;
+  final List<BookingType> bookingTypes;
+  final List<BookingSource> bookingSources;
 
   @override
-  List<Object?> get props => [];
+  List<Object?> get props => [rooms, bookingTypes, bookingSources];
 }
 
 class ConfigError extends ConfigState {

@@ -9,6 +9,7 @@ import 'core/theme/app_theme.dart';
 import 'features/auth/auth_cubit.dart';
 import 'features/booking/entry_screen.dart';
 import 'features/config/config_cubit.dart';
+import 'features/config/config_repository.dart';
 import 'features/daily/daily_screen.dart';
 import 'features/monthly/monthly_screen.dart';
 import 'features/settings/settings_screen.dart';
@@ -108,7 +109,18 @@ class HomeShell extends StatelessWidget {
         final currentIndex = _indexFromLocation(location, isOwner);
 
         return Scaffold(
-          body: child,
+          body: BlocBuilder<ConfigCubit, ConfigState>(
+            builder: (context, configState) {
+              if (configState is ConfigLoading || configState is ConfigInitial) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (configState is ConfigError) {
+                return _ConfigErrorView(message: configState.message);
+              }
+
+              return child;
+            },
+          ),
           bottomNavigationBar: BottomNavigationBar(
             currentIndex: currentIndex,
             onTap: (index) => _onTap(context, index, isOwner),
@@ -151,6 +163,50 @@ class HomeShell extends StatelessWidget {
   }
 }
 
+class _ConfigErrorView extends StatelessWidget {
+  const _ConfigErrorView({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<AppColors>()!;
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.wifi_off_rounded, size: 48, color: colors.textSecondary),
+            const SizedBox(height: 16),
+            Text(
+              'Could not load configuration',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: colors.textPrimary,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Check your connection and try again.',
+              style: TextStyle(fontSize: 13, color: colors.textSecondary),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            FilledButton(
+              onPressed: () => context.read<ConfigCubit>().loadConfig(),
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class StayOpsApp extends StatefulWidget {
   const StayOpsApp({super.key});
 
@@ -167,7 +223,7 @@ class _StayOpsAppState extends State<StayOpsApp> {
   void initState() {
     super.initState();
     _authCubit = AuthCubit();
-    _configCubit = ConfigCubit();
+    _configCubit = ConfigCubit(ConfigRepository());
     _router = _buildRouter(_authCubit);
   }
 

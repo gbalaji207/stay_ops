@@ -86,13 +86,13 @@ Both PINs work. Role-based nav renders correctly. Route guard blocks staff from 
 
 ### Tasks
 
-- [ ] `Room`, `BookingType`, `BookingSource` models (with `fromJson`, extend `Equatable`)
-- [ ] `ConfigRepository` — `fetchRooms()`, `fetchBookingTypes()`, `fetchBookingSources()`
+- [x] `Room`, `BookingType`, `BookingSource` models (with `fromJson`, extend `Equatable`)
+- [x] `ConfigRepository` — `fetchRooms()`, `fetchBookingTypes()`, `fetchBookingSources()`
   - All queries filter: `is_active=eq.true`, `property_id=eq.<id>`, `order=sort_order.asc`
-- [ ] `ConfigCubit` + states (`ConfigLoading`, `ConfigLoaded`, `ConfigError`)
-- [ ] `ConfigCubit` provided at app root (above navigator)
-- [ ] Post-auth trigger — `BlocListener` on `AuthCubit` calls `ConfigCubit.loadConfig()` on `AuthAuthenticated`
-- [ ] `ConfigError` state shows a retry UI (not a blank screen)
+- [x] `ConfigCubit` + states (`ConfigLoading`, `ConfigLoaded`, `ConfigError`)
+- [x] `ConfigCubit` provided at app root (above navigator)
+- [x] Post-auth trigger — `BlocListener` on `AuthCubit` calls `ConfigCubit.loadConfig()` on `AuthAuthenticated`
+- [x] `ConfigError` state shows a retry UI (not a blank screen)
 
 ### Test Checklist
 - [ ] After PIN entry, config loads without error
