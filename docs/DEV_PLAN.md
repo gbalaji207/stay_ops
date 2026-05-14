@@ -237,28 +237,28 @@ Heatmap renders correctly. Day detail card and room filter work. Tap-to-edit flo
 
 ### Tasks
 
-- [ ] `SettingsCubit` + states (`SettingsLoading`, `SettingsLoaded`, `SettingsError`)
-- [ ] `SettingsScreen` — property card, 3 config rows, sign-out row, version footer
-- [ ] Sign out → `AuthCubit.logout()` → `AuthInitial` → router redirects to `/pin`
-- [ ] `RoomConfigScreen` — list of rooms with inline edit, add new row
-- [ ] `BookingTypeConfigScreen` — list of booking types with inline edit, add new row
-- [ ] `BookingSourceConfigScreen` — list of sources with type-filter pills, inline edit, add new row
-- [ ] Inline edit pattern — row expands in-place: name input + Save / Cancel / Deactivate
-- [ ] Save → PATCH Supabase → `SettingsCubit` updates → `ConfigCubit.reload()`
-- [ ] Deactivate → `is_active=false` → row dims to 45% opacity (still visible, restorable)
-- [ ] Add new → dashed-border input row at bottom → appends at end of sort order
-- [ ] Inactive items visible in settings list but absent from `BookingForm` dropdowns (via `ConfigCubit`)
+- [x] `SettingsCubit` + states (`SettingsLoading`, `SettingsLoaded`, `SettingsError`)
+- [x] `SettingsScreen` — property card, 3 config rows, sign-out row, version footer
+- [x] Sign out → `AuthCubit.logout()` → `AuthInitial` → router redirects to `/pin`
+- [x] `RoomConfigScreen` — list of rooms with inline edit, add new row
+- [x] `BookingTypeConfigScreen` — list of booking types with inline edit, add new row
+- [x] `BookingSourceConfigScreen` — list of sources with type-filter pills, inline edit, add new row
+- [x] Inline edit pattern — row expands in-place: name input + Save / Cancel / Deactivate
+- [x] Save → PATCH Supabase → `SettingsCubit` updates → `ConfigCubit.reload()`
+- [x] Deactivate → `is_active=false` → row dims to 50% opacity (still visible, restorable)
+- [x] Add new → accent-border input row at bottom → appends at end of sort order
+- [x] Inactive items visible in settings list but absent from `BookingForm` dropdowns (via `ConfigCubit`)
 
 ### Test Checklist
-- [ ] Settings tab absent from nav when logged in as staff
-- [ ] Direct URL `/settings` as staff → redirected to `/daily`
-- [ ] Rename a room → name updates in DB → `ConfigCubit.reload()` → new name appears in BookingForm room dropdown
-- [ ] Deactivate a room → dims in settings list → absent from BookingForm dropdown → existing bookings for that room unaffected in Daily/Monthly
-- [ ] Restore (re-activate) a room → reappears in BookingForm dropdown
-- [ ] Add a new OTA source → appears in BookingForm source dropdown when OTA type selected
-- [ ] Deactivate an OTA source → disappears from BookingForm dropdown → historical bookings using it still display correctly
-- [ ] Sign out → returns to PIN screen → role cleared (verify Settings tab absent after re-login as staff)
-- [ ] Booking type filter pills on sources screen filter correctly
+- [x] Settings tab absent from nav when logged in as staff
+- [x] Direct URL `/settings` as staff → redirected to `/daily`
+- [x] Rename a room → name updates in DB → `ConfigCubit.reload()` → new name appears in BookingForm room dropdown
+- [x] Deactivate a room → dims in settings list → absent from BookingForm dropdown → existing bookings for that room unaffected in Daily/Monthly
+- [x] Restore (re-activate) a room → reappears in BookingForm dropdown
+- [x] Add a new OTA source → appears in BookingForm source dropdown when OTA type selected
+- [x] Deactivate an OTA source → disappears from BookingForm dropdown → historical bookings using it still display correctly
+- [x] Sign out → returns to PIN screen → role cleared (verify Settings tab absent after re-login as staff)
+- [x] Booking type filter pills on sources screen filter correctly
 
 ### Definition of Done
 Owner can manage all config. Changes reflect immediately in BookingForm via ConfigCubit. Staff cannot access settings.

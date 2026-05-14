@@ -12,6 +12,11 @@ import 'features/config/config_cubit.dart';
 import 'features/config/config_repository.dart';
 import 'features/daily/daily_screen.dart';
 import 'features/monthly/monthly_screen.dart';
+import 'features/settings/booking_source_config_screen.dart';
+import 'features/settings/booking_type_config_screen.dart';
+import 'features/settings/room_config_screen.dart';
+import 'features/settings/settings_cubit.dart';
+import 'features/settings/settings_repository.dart';
 import 'features/settings/settings_screen.dart';
 import 'features/auth/pin_screen.dart';
 
@@ -73,18 +78,33 @@ GoRouter _buildRouter(AuthCubit authCubit) {
             routes: [
               GoRoute(
                 path: 'rooms',
-                builder: (_, _) =>
-                    const Scaffold(body: Center(child: Text('Rooms — coming soon'))),
+                builder: (context, _) => BlocProvider(
+                  create: (ctx) => SettingsCubit(
+                    SettingsRepository(),
+                    ctx.read<ConfigCubit>(),
+                  ),
+                  child: const RoomConfigScreen(),
+                ),
               ),
               GoRoute(
                 path: 'booking-types',
-                builder: (_, _) =>
-                    const Scaffold(body: Center(child: Text('Booking Types — coming soon'))),
+                builder: (context, _) => BlocProvider(
+                  create: (ctx) => SettingsCubit(
+                    SettingsRepository(),
+                    ctx.read<ConfigCubit>(),
+                  ),
+                  child: const BookingTypeConfigScreen(),
+                ),
               ),
               GoRoute(
                 path: 'booking-sources',
-                builder: (_, _) =>
-                    const Scaffold(body: Center(child: Text('Booking Sources — coming soon'))),
+                builder: (context, _) => BlocProvider(
+                  create: (ctx) => SettingsCubit(
+                    SettingsRepository(),
+                    ctx.read<ConfigCubit>(),
+                  ),
+                  child: const BookingSourceConfigScreen(),
+                ),
               ),
             ],
           ),
