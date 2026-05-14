@@ -15,11 +15,14 @@ class BookingCubit extends Cubit<BookingState> {
     if (isClosed) return;
     emit(const BookingChecking());
     try {
-      final conflicts =
-          await _repository.checkConflicts(input.roomId, input.nights);
+      final conflicts = await _repository.checkConflicts(
+        input.roomId,
+        input.nights,
+        excludeGroupId: input.existingGroupId, // null for new bookings
+      );
       if (isClosed) return;
       if (conflicts.isEmpty) {
-        await _saveNew(input);
+        await _executeSave(input);
       } else {
         emit(BookingConflict(conflicts: conflicts, pendingInput: input));
       }
@@ -37,9 +40,7 @@ class BookingCubit extends Cubit<BookingState> {
     emit(const BookingSaving());
     try {
       await _repository.softDeleteConflicts(input.roomId, input.nights);
-      await _repository.saveBookingGroup(input);
-      if (isClosed) return;
-      emit(const BookingSaved());
+      await _executeSave(input);
     } catch (e) {
       if (isClosed) return;
       emit(BookingError(e.toString()));
@@ -50,11 +51,15 @@ class BookingCubit extends Cubit<BookingState> {
     if (!isClosed) emit(const BookingIdle());
   }
 
-  Future<void> _saveNew(BookingGroupInput input) async {
+  Future<void> _executeSave(BookingGroupInput input) async {
     if (isClosed) return;
     emit(const BookingSaving());
     try {
-      await _repository.saveBookingGroup(input);
+      if (input.existingGroupId != null) {
+        await _repository.updateBookingGroup(input);
+      } else {
+        await _repository.saveBookingGroup(input);
+      }
       if (isClosed) return;
       emit(const BookingSaved());
     } catch (e) {

@@ -14,8 +14,10 @@ class ConfigRepository {
         .select()
         .eq('property_id', AppConstants.propertyId)
         .eq('is_active', true)
-        .order('sort_order');
-    return (response as List).map((e) => Room.fromJson(e as Map<String, dynamic>)).toList();
+        .order('sort_order', ascending: true);
+    return (response as List)
+        .map((e) => Room.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   Future<List<BookingType>> fetchBookingTypes() async {
@@ -24,8 +26,10 @@ class ConfigRepository {
         .select()
         .eq('property_id', AppConstants.propertyId)
         .eq('is_active', true)
-        .order('sort_order');
-    return (response as List).map((e) => BookingType.fromJson(e as Map<String, dynamic>)).toList();
+        .order('sort_order', ascending: true);
+    return (response as List)
+        .map((e) => BookingType.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   Future<List<BookingSource>> fetchBookingSources() async {
@@ -34,7 +38,9 @@ class ConfigRepository {
         .select()
         .eq('property_id', AppConstants.propertyId)
         .eq('is_active', true)
-        .order('sort_order');
-    return (response as List).map((e) => BookingSource.fromJson(e as Map<String, dynamic>)).toList();
+        .order('sort_order', ascending: true);
+    return (response as List)
+        .map((e) => BookingSource.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 }

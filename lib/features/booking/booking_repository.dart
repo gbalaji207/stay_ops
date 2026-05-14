@@ -13,15 +13,22 @@ class BookingRepository {
   final _client = Supabase.instance.client;
 
   Future<List<ConflictInfo>> checkConflicts(
-      String roomId, List<DateTime> nights) async {
+    String roomId,
+    List<DateTime> nights, {
+    String? excludeGroupId,
+  }) async {
     if (nights.isEmpty) return [];
     final dates = nights.map(_fmt).toList();
-    final rows = await _client
+    var query = _client
         .from('booking_days')
-        .select('booking_date, rooms(name)')
+        .select('booking_date, booking_group_id, rooms(name)')
         .eq('room_id', roomId)
         .inFilter('booking_date', dates)
         .eq('is_active', true);
+    if (excludeGroupId != null) {
+      query = query.neq('booking_group_id', excludeGroupId);
+    }
+    final rows = await query;
     return (rows as List).map((row) {
       final roomMap = row['rooms'] as Map<String, dynamic>;
       return ConflictInfo(
@@ -99,6 +106,68 @@ class BookingRepository {
             .eq('id', groupId);
       }
     }
+  }
+
+  Future<void> updateBookingGroup(BookingGroupInput input) async {
+    final groupId = input.existingGroupId!;
+
+    // 1. Fetch currently active nights for this group
+    final activeRows = await _client
+        .from('booking_days')
+        .select('booking_date')
+        .eq('booking_group_id', groupId)
+        .eq('is_active', true);
+    final currentDates = (activeRows as List)
+        .map((r) => DateTime.parse(r['booking_date'] as String))
+        .toSet();
+    final newDates = input.nights.toSet();
+
+    // 2. Soft-delete removed nights
+    final removedDates = currentDates.difference(newDates);
+    if (removedDates.isNotEmpty) {
+      await _client
+          .from('booking_days')
+          .update({'is_active': false})
+          .eq('booking_group_id', groupId)
+          .inFilter('booking_date', removedDates.map(_fmt).toList());
+    }
+
+    // 3. INSERT added nights (stay extension)
+    final addedDates = newDates.difference(currentDates);
+    if (addedDates.isNotEmpty) {
+      final perNight = input.perNightAmount;
+      await _client.from('booking_days').insert(
+            addedDates
+                .map((date) => {
+                      'booking_group_id': groupId,
+                      'property_id': AppConstants.propertyId,
+                      'room_id': input.roomId,
+                      'booking_date': _fmt(date),
+                      'amount': perNight,
+                      'is_active': true,
+                    })
+                .toList(),
+          );
+    }
+
+    // 4. PATCH booking_groups metadata
+    await _client.from('booking_groups').update({
+      'check_in': _fmt(input.checkIn),
+      'check_out': _fmt(input.checkOut),
+      'total_amount': input.totalAmount,
+      'payment_received': input.paymentReceived,
+      'booking_type_id': input.bookingTypeId,
+      'booking_source_id': input.bookingSourceId,
+      'notes': input.notes,
+      'updated_at': DateTime.now().toIso8601String(),
+    }).eq('id', groupId);
+
+    // 5. Recalculate per-night amount on all remaining active days
+    await _client
+        .from('booking_days')
+        .update({'amount': input.perNightAmount})
+        .eq('booking_group_id', groupId)
+        .eq('is_active', true);
   }
 
   String _fmt(DateTime date) =>

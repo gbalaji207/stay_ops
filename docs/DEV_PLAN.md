@@ -159,31 +159,31 @@ New bookings save correctly. Conflict detection works. Overwrite flow soft-delet
 
 ### Tasks
 
-- [ ] `DailyCubit` + states (`DailyLoading`, `DailyLoaded`, `DailyError`)
-- [ ] `DailyCubit.load(date)` — fetches all active `booking_days` for the date, joined with `booking_groups`, `rooms`, `booking_types`, `booking_sources`
-- [ ] `DailyCubit.fetchGroupForDay(roomId, date)` — fetches full `booking_group` for edit
-- [ ] `DailyScreen` — date navigator, stats bar, scrollable room card list
-- [ ] Booked room card — status pill, date range, source tag, per-night amount, payment status
-- [ ] Vacant room card — danger-tinted border, "Tap to add booking" hint
-- [ ] Booked card tap → fetch group → open `BookingForm` in edit mode (pre-filled)
-- [ ] Vacant card tap → open `BookingForm` in new mode (room + date pre-filled)
-- [ ] Stats bar: Revenue (sum of `booking_days.amount`), Occupied count, Occupancy %
-- [ ] Edit save → `BookingRepository.updateBookingGroup()`:
+- [x] `DailyCubit` + states (`DailyLoading`, `DailyLoaded`, `DailyError`)
+- [x] `DailyCubit.load(date)` — fetches all active `booking_days` for the date, joined with `booking_groups`, `rooms`, `booking_types`, `booking_sources`
+- [x] `DailyCubit.fetchGroupForDay(roomId, date)` — fetches full `booking_group` for edit
+- [x] `DailyScreen` — date navigator, stats bar, scrollable room card list
+- [x] Booked room card — status pill, date range, source tag, per-night amount, payment status
+- [x] Vacant room card — danger-tinted border, "Tap to add booking" hint
+- [x] Booked card tap → fetch group → open `BookingForm` in edit mode (pre-filled)
+- [x] Vacant card tap → open `BookingForm` in new mode (room + date pre-filled)
+- [x] Stats bar: Revenue (sum of `booking_days.amount`), Occupied count, Occupancy %
+- [x] Edit save → `BookingRepository.updateBookingGroup()`:
   - PATCH `booking_groups` metadata
   - Soft-delete removed nights
   - Recalculate and PATCH remaining `booking_days.amount`
 
 ### Test Checklist
-- [ ] Daily view loads correctly for today
-- [ ] All 5 rooms shown — booked rooms show correct source, amount, payment status
-- [ ] Vacant room shows "Vacant" pill and hint text
-- [ ] Stats bar totals match sum of visible card amounts
-- [ ] Tapping a booked card opens edit form pre-filled with correct group data
-- [ ] Tapping a vacant card opens new booking form with room + date pre-filled
-- [ ] Edit a 3-night booking: change check-out to shorten stay → verify removed night soft-deleted in DB, remaining nights have recalculated amount
-- [ ] Edit a booking: change total amount → per-night amount updates correctly
-- [ ] Date navigator (‹ ›) loads correct data for adjacent days
-- [ ] Amount shown on card = per-night split, not group total (verify with a multi-night booking)
+- [x] Daily view loads correctly for today
+- [x] All 5 rooms shown — booked rooms show correct source, amount, payment status
+- [x] Vacant room shows "Vacant" pill and hint text
+- [x] Stats bar totals match sum of visible card amounts
+- [x] Tapping a booked card opens edit form pre-filled with correct group data
+- [x] Tapping a vacant card opens new booking form with room + date pre-filled
+- [x] Edit a 3-night booking: change check-out to shorten stay → verify removed night soft-deleted in DB, remaining nights have recalculated amount
+- [x] Edit a booking: change total amount → per-night amount updates correctly
+- [x] Date navigator (‹ ›) loads correct data for adjacent days
+- [x] Amount shown on card = per-night split, not group total (verify with a multi-night booking)
 
 ### Definition of Done
 Daily view loads, all card states render, edit flow updates DB correctly.

@@ -251,6 +251,7 @@ class _StayOpsAppState extends State<StayOpsApp> {
         },
         child: MaterialApp.router(
           title: 'StayOps',
+          debugShowCheckedModeBanner: false,
           theme: AppTheme.light(),
           darkTheme: AppTheme.dark(),
           themeMode: ThemeMode.system,
