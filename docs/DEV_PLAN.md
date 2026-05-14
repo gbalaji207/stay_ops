@@ -196,33 +196,33 @@ Daily view loads, all card states render, edit flow updates DB correctly.
 
 ### Tasks
 
-- [ ] `MonthlyCubit` + states (`MonthlyLoading`, `MonthlyLoaded`, `MonthlyError`)
-- [ ] `MonthlyCubit.load(year, month, roomId?)` — fetches all active `booking_days` for the month range
-- [ ] Map results to `DayStats` per date: `{ bookedCount, revenue, occupancyPct }`
-- [ ] `MonthlyScreen` — month navigator, stats bar, room filter pills, heatmap calendar
-- [ ] Heatmap calendar — 7-column grid, correct day-of-week alignment for month start
-- [ ] Heatmap cell revenue brackets (all-rooms): 0 / <8k / 8–14k / 14–22k / 22k+
-- [ ] Today ring (accent) and selected ring (warning/amber) — visually distinct
-- [ ] Revenue label on cell (e.g. "39k") — hidden on level-0 cells
-- [ ] Heatmap legend below calendar
-- [ ] Room filter pills — "All" + one per active room; filters both heatmap and detail card
-- [ ] Day detail card — appears below calendar on date tap; header with date + total; room rows
-- [ ] Each room row in detail card: room name, source · type, per-night amount, payment status
-- [ ] Room row tap → fetch group → open `BookingForm` in edit mode
-- [ ] Tapping a level-0 (empty) date → "No bookings on X" text state in detail area
-- [ ] Stats bar: Month Revenue (sum), Avg Occupancy % (mean daily)
+- [x] `MonthlyCubit` + states (`MonthlyLoading`, `MonthlyLoaded`, `MonthlyError`)
+- [x] `MonthlyCubit.load(year, month, roomId?)` — fetches all active `booking_days` for the month range
+- [x] Map results to `DayStats` per date: `{ bookedCount, revenue, occupancyPct }`
+- [x] `MonthlyScreen` — month navigator, stats bar, room filter pills, heatmap calendar
+- [x] Heatmap calendar — 7-column grid, correct day-of-week alignment for month start
+- [x] Heatmap cell revenue brackets (all-rooms): 0 / <8k / 8–14k / 14–22k / 22k+
+- [x] Today ring (accent) and selected ring (warning/amber) — visually distinct
+- [x] Revenue label on cell (e.g. "39k") — hidden on level-0 cells
+- [x] Heatmap legend below calendar
+- [x] Room filter pills — "All" + one per active room; filters both heatmap and detail card
+- [x] Day detail card — appears below calendar on date tap; header with date + total; room rows
+- [x] Each room row in detail card: room name, source · type, per-night amount, payment status
+- [x] Room row tap → fetch group → open `BookingForm` in edit mode
+- [x] Tapping a level-0 (empty) date → "No bookings on X" text state in detail area
+- [x] Stats bar: Month Revenue (sum), Avg Occupancy % (mean daily)
 
 ### Test Checklist
-- [ ] Calendar renders with correct day-of-week alignment for May 2026 (starts on Friday)
-- [ ] Heatmap cell colours match revenue brackets
-- [ ] Today's date has accent ring; no selected ring until a date is tapped
-- [ ] Tapping a date shows correct amber selected ring (today keeps accent ring if today is selected)
-- [ ] Day detail card shows correct rooms, amounts, payment status for tapped date
-- [ ] Room filter: selecting "Room 101" filters heatmap revenue and detail card rows
-- [ ] Room row tap → correct booking group opens in edit form
-- [ ] Tapping an empty date shows empty state text
-- [ ] Month navigation (‹ ›) loads correct month data
-- [ ] Stats bar month revenue matches sum of all booking_days amounts for the month
+- [x] Calendar renders with correct day-of-week alignment for May 2026 (starts on Friday)
+- [x] Heatmap cell colours match revenue brackets
+- [x] Today's date has accent ring; no selected ring until a date is tapped
+- [x] Tapping a date shows correct amber selected ring (today keeps accent ring if today is selected)
+- [x] Day detail card shows correct rooms, amounts, payment status for tapped date
+- [x] Room filter: selecting "Room 101" filters heatmap revenue and detail card rows
+- [x] Room row tap → correct booking group opens in edit form
+- [x] Tapping an empty date shows empty state text
+- [x] Month navigation (‹ ›) loads correct month data
+- [x] Stats bar month revenue matches sum of all booking_days amounts for the month
 
 ### Definition of Done
 Heatmap renders correctly. Day detail card and room filter work. Tap-to-edit flows through to BookingForm.
