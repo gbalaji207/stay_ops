@@ -1,9 +1,9 @@
 # StayOps — Wireframe & UI Spec
 
 **Product:** StayOps — Hospitality Income Tracker
-**Version:** 1.1
+**Version:** 1.2
 **Date:** May 2026
-**Scope:** All 5 screens — PIN, Booking Form, Daily, Monthly, Settings
+**Scope:** All 6 screens — PIN, Home (Dashboard), Booking Form, Daily, Monthly, Settings
 
 ---
 
@@ -11,12 +11,13 @@
 
 1. [Design System](#1-design-system)
 2. [Screen 1 — PIN Authentication](#2-screen-1--pin-authentication)
-3. [Screen 2 — Booking Entry / Edit Form](#3-screen-2--booking-entry--edit-form)
-4. [Screen 3 — Daily View](#4-screen-3--daily-view)
-5. [Screen 4 — Monthly View](#5-screen-4--monthly-view)
-6. [Screen 5 — Settings](#6-screen-5--settings)
-7. [Navigation & Role Rules](#7-navigation--role-rules)
-8. [Open Design Decisions](#8-open-design-decisions)
+3. [Screen 2 — Home / Dashboard](#3-screen-2--home--dashboard)
+4. [Screen 3 — Booking Entry / Edit Form](#4-screen-3--booking-entry--edit-form)
+5. [Screen 4 — Daily View](#5-screen-4--daily-view)
+6. [Screen 5 — Monthly View](#6-screen-5--monthly-view)
+7. [Screen 6 — Settings](#7-screen-6--settings)
+8. [Navigation & Role Rules](#8-navigation--role-rules)
+9. [Open Design Decisions](#9-open-design-decisions)
 
 ---
 
@@ -119,10 +120,12 @@ All widgets reference these semantic names. Raw hex values are defined once in `
 | Trigger | Action |
 |---|---|
 | 4 digits entered | Auto-submits immediately — no confirm button |
-| Correct owner PIN (1234) | `AuthCubit.authenticated(role: owner)` → `ConfigCubit.loadConfig()` → navigate `/daily` |
-| Correct staff PIN (5678) | `AuthCubit.authenticated(role: staff)` → `ConfigCubit.loadConfig()` → navigate `/daily` |
+| Correct owner PIN (1234) | `AuthCubit.authenticated(role: owner)` → `ConfigCubit.loadConfig()` → navigate `/home` |
+| Correct staff PIN (5678) | `AuthCubit.authenticated(role: staff)` → `ConfigCubit.loadConfig()` → navigate `/home` |
 | Wrong PIN | Shake animation on dots · error text appears below numpad · auto-clears after 2s |
 | Backspace | Removes last digit, unfills rightmost filled dot |
+
+> Note: default route after login is `/home` (was `/daily` in v1.1). Both roles land on the Home screen.
 
 ### Error State
 - Error text: 12px, `#E24B4A`, below numpad, height reserved so layout doesn't shift
@@ -134,17 +137,152 @@ All widgets reference these semantic names. Raw hex values are defined once in `
 
 ---
 
-## 3. Screen 2 — Booking Entry / Edit Form
+## 3. Screen 2 — Home / Dashboard
+
+> **New in v1.2.** Replaces the old Entry tab as the first tab in the bottom nav. The "Entry" tab label and icon are replaced by "Home" with a grid/dashboard icon. New bookings are initiated via a FAB (floating action button) instead.
+
+### Layout
+- **Header:** Greeting ("Good morning 👋") + date · Property badge (top-right)
+- **Scrollable body:** 6 sections, each with a sticky section header
+- **FAB:** Fixed position above bottom nav — opens `BookingForm` in new-booking mode
+- **Bottom navigation:** Home · Daily · Monthly · Settings (owner) / Home · Daily · Monthly (staff)
+
+### Header
+- Greeting text: 17sp, weight 600, `colorTextPrimary`
+  - Time-based: "Good morning" (5am–12pm), "Good afternoon" (12pm–5pm), "Good evening" (5pm–5am)
+- Date line: 11sp, `colorTextSecondary` — e.g. "Thursday, 15 May 2026"
+- Property badge (top-right): accent-subtle background, property name in `colorAccent`, small building emoji
+
+### Sections
+
+All 6 sections always render. If a section has no data it shows an italic grey empty-state row — never hidden entirely, to avoid layout shift on scroll.
+
+Section headers are **sticky** — they pin to the top of the scroll area as the user scrolls, so section context is never lost.
+
+#### Section 1 — Today's Check-outs
+- Header colour: `colorDanger`
+- Icon: door-exit arrow
+- Count badge: "N rooms" (right-aligned)
+- Cards: one `BookingCard` per group where `check_out = today` and `is_active = true`
+- Empty state: "No check-outs today"
+- **Data query:** `booking_groups WHERE check_out = today AND is_active = true`
+
+#### Section 2 — Today's Check-ins
+- Header colour: `colorSuccess`
+- Icon: door-enter arrow
+- Count badge: "N rooms"
+- Cards: one `BookingCard` per group where `check_in = today` and `is_active = true`
+- Empty state: "No check-ins today"
+- **Data query:** `booking_groups WHERE check_in = today AND is_active = true`
+
+#### Section 3 — Occupancy Today
+- No count badge
+- **Occupancy strip** (single card): 3 blocks separated by 1px dividers
+  - Block 1 — Occupied count (`colorSuccess`, large numeral)
+  - Block 2 — Vacant count (`colorDanger`, large numeral)
+  - Block 3 — Occupancy % (`colorAccent`, large numeral)
+  - Each block has a thin progress bar below the label
+- **Data query:** `COUNT booking_days WHERE booking_date = today AND is_active = true`. Vacant = total active rooms − occupied.
+
+#### Section 4 — Upcoming Check-ins
+- Count badge: "Next 3 days"
+- Grouped by date into `UpcomingCard` components (one card per date)
+  - Card day header: "Tomorrow · 16 May" or "17 May" etc. — 10sp, `colorAccent`, uppercase
+  - Each row within a card: room name + source (left) · night count + group total amount (right)
+- Empty state: "No upcoming check-ins in the next 3 days"
+- **Data query:** `booking_groups WHERE check_in IN (today+1, today+2, today+3) AND is_active = true`. Grouped by `check_in`.
+
+#### Section 5 — New Bookings Today
+- Count badge: "N added"
+- Compact `NewBookingRow` layout (smaller than BookingCard):
+  - Accent dot · Room name + "New" badge · date range (left) · group total (right)
+- Covers bookings *entered* today for any stay date — not same-day arrivals only
+- Empty state: "No new bookings recorded today"
+- **Data query:** `booking_groups WHERE DATE(created_at) = today AND is_active = true`
+
+#### Section 6 — Payment Pending
+- Header colour: `colorWarning`
+- Icon: clock
+- Count badge: total pending amount ("₹XX,XXX due") — sum of all pending `total_amount` values
+- Cards: one `BookingCard` per group where `payment_received = false AND is_active = true`
+- Empty state: "All payments received"
+- **Data query:** `booking_groups WHERE payment_received = false AND is_active = true`
+
+### BookingCard (shared component used in sections 1, 2, 6)
+
+```
+┌──────────────────────────────────────────┐
+│  Room 101                      ₹9,900    │
+│  May 13 → 16 · 3 nights  [MakeMyTrip] [Pending] │
+└──────────────────────────────────────────┘
+```
+
+- Room name: 13sp, weight 600
+- Amount: 14sp, weight 600 (group total, not per-night split)
+- Date range + night count: 11sp, `colorTextSecondary`
+- Source tag: accent-subtle bg
+- Payment pill: success/warning tint
+- **Tapping any card** → `HomeCubit.fetchGroup(groupId)` → opens `BookingForm` in edit mode pre-filled with full `booking_group`
+
+### FAB
+- Fixed position, bottom-right, above bottom nav (bottom: 66px, right: 18px)
+- 48×48px, 16px border-radius, `colorAccent` background
+- Plus icon (white, 22px stroke)
+- Shadow: `0 4px 16px rgba(83,74,183,0.35)` light / `0 4px 20px rgba(83,74,183,0.5)` dark
+- **Tapping FAB** → opens `BookingForm` as bottom sheet in new-booking mode (no pre-fills)
+
+### HomeCubit
+New cubit required (feature-level scope):
+
+```dart
+// States
+class HomeLoading extends HomeState {}
+class HomeLoaded extends HomeState {
+  final List<BookingGroup> checkOuts;
+  final List<BookingGroup> checkIns;
+  final OccupancySnapshot occupancy;
+  final Map<DateTime, List<BookingGroup>> upcoming;  // next 3 days, grouped by date
+  final List<BookingGroup> newToday;
+  final List<BookingGroup> paymentPending;
+}
+class HomeError extends HomeState { final String message; }
+
+// Key method
+Future<void> load() async {
+  emit(HomeLoading());
+  // 5 parallel queries via BookingRepository + HomeRepository
+  // ...
+  emit(HomeLoaded(...));
+}
+```
+
+### Data Notes
+- All 6 queries run in parallel on screen load and on pull-to-refresh
+- `created_at` is already on `booking_groups` — no schema change needed
+- Amount shown in sections 1, 2, 6 is the **group total** (`booking_groups.total_amount`), not the per-night split. This matches the context (check-in/out and payment are group-level events)
+- Upcoming check-ins (section 4) also show group total per upcoming booking
+
+### Role Difference
+- Owner: 4-tab bottom nav (Home · Daily · Monthly · Settings)
+- Staff: 3-tab bottom nav (Home · Daily · Monthly) — Settings tab absent entirely
+- Both roles see all 6 dashboard sections
+
+---
+
+## 4. Screen 3 — Booking Entry / Edit Form
 
 ### Trigger Points
-The same `BookingForm` widget is reused across all three entry points:
+The same `BookingForm` widget is reused across all entry points:
 
 | Entry point | Mode | Pre-filled fields |
 |---|---|---|
-| Entry tab (bottom nav) | New | None |
+| Home screen FAB | New | None |
+| Home — any booking card tap | Edit | All fields from `booking_group` |
 | Daily screen — vacant card tap | New | Room, check-in date |
 | Daily screen — booked card tap | Edit | All fields from `booking_group` |
 | Monthly — day detail row tap | Edit | All fields from `booking_group` |
+
+> Note: the old "Entry tab" direct bottom-nav route is removed in v1.2. The FAB on Home is the primary new-booking entry point.
 
 ### Presentation
 - Rendered as a **bottom sheet** (slides up from bottom)
@@ -165,7 +303,7 @@ The same `BookingForm` widget is reused across all three entry points:
 | Booking type | Chip selector | From `ConfigCubit.bookingTypes`. Single-select. |
 | Booking source | Dropdown | From `ConfigCubit.bookingSources` filtered by selected type. Hidden if selected type has no active sources. |
 | Payment received | Toggle | Boolean. Group-level (not per-night). |
-| Notes | Text input | Optional. |
+| Notes | Text field | Optional. |
 
 ### Computed Row
 - Purple-tinted row (`rgba(83,74,183,0.15)` bg, `#9B93FF` text)
@@ -189,7 +327,7 @@ User taps save
 ### Conflict Dialog
 - Modal overlay (`rgba(0,0,0,0.75)` backdrop)
 - Title: "Booking conflict" with amber warning icon
-- Body: lists each conflicting date as a bullet
+- Body: lists each conflicting date + room name as bullets
 - Two buttons: "Cancel" (dismiss, stay on form) | "Overwrite" (red, proceeds)
 - Overwrite action: soft-deletes conflicting `booking_days` → inserts new group
 
@@ -201,7 +339,7 @@ When check-out is moved earlier:
 
 ---
 
-## 4. Screen 3 — Daily View
+## 5. Screen 4 — Daily View
 
 ### Layout
 - Header: "Daily" title + date navigator (‹ date ›)
@@ -234,12 +372,12 @@ When check-out is moved earlier:
 The amount shown on a Daily card is the **per-night split** for that specific date, not the booking group total. The group total is only visible inside the edit form. This avoids confusion on multi-night bookings.
 
 ### Role Difference
-- Owner: 4-tab bottom nav (Entry · Daily · Monthly · Settings)
-- Staff: 3-tab bottom nav (Entry · Daily · Monthly) — Settings tab absent entirely
+- Owner: 4-tab bottom nav (Home · Daily · Monthly · Settings)
+- Staff: 3-tab bottom nav (Home · Daily · Monthly) — Settings tab absent entirely
 
 ---
 
-## 5. Screen 4 — Monthly View
+## 6. Screen 5 — Monthly View
 
 ### Layout
 - Header: "Monthly" title + month navigator (‹ May 2026 ›)
@@ -293,17 +431,17 @@ The amount shown on a Daily card is the **per-night split** for that specific da
 
 ---
 
-## 6. Screen 5 — Settings
+## 7. Screen 6 — Settings
 
 ### Access Control
 - Settings tab visible **only** for owner role — not greyed out for staff, fully absent from nav
-- Route guard: `/settings/*` redirects to `/daily` if `role != owner`
+- Route guard: `/settings/*` redirects to `/home` if `role != owner`
 
 ### Settings Hub Layout
 - **Property card:** Property name + truncated UUID. Read-only display.
 - **Configuration section:** 3 rows — Rooms · Booking types · Booking sources. Each shows active count and chevron.
 - **Session section:** Sign out row (red icon, chevron).
-- **Version footer:** "StayOps v1.1 · May 2026"
+- **Version footer:** "StayOps v1.2 · May 2026"
 
 ### Sign Out
 - Calls `AuthCubit.logout()` → emits `AuthInitial` → router redirects to `/pin`
@@ -347,20 +485,22 @@ After any write (add, edit, deactivate):
 1. `SettingsCubit` PATCHes Supabase
 2. Calls `ConfigCubit.reload()`
 3. Session cache updated immediately
-4. Staff on Entry screen see updated dropdowns on next form open
+4. Staff on any screen will see updated dropdowns on next form open
 
 ---
 
-## 7. Navigation & Role Rules
+## 8. Navigation & Role Rules
 
 ### Bottom Nav Tabs
 
 | Tab | Icon | Owner | Staff |
 |---|---|---|---|
-| Entry | pencil-plus | Visible | Visible |
+| Home | grid/dashboard | Visible | Visible |
 | Daily | calendar-event | Visible | Visible |
 | Monthly | calendar-month | Visible | Visible |
 | Settings | settings | Visible | **Hidden** |
+
+> **v1.2 change:** The "Entry" tab (pencil-plus icon) has been replaced by "Home" (grid/dashboard icon). New bookings are created via the FAB on the Home screen rather than via a dedicated bottom-nav tab. This applies to both owner and staff.
 
 ### Route Guard Logic
 ```dart
@@ -368,18 +508,23 @@ redirect: (context, state) {
   final auth = authCubit.state;
   if (auth is! AuthAuthenticated) return '/pin';
   if (state.matchedLocation.startsWith('/settings')) {
-    if (auth.role != UserRole.owner) return '/daily';
+    if (auth.role != UserRole.owner) return '/home';
   }
   return null;
 }
 ```
 
 ### Default Route After Login
-Both roles navigate to `/daily` after successful PIN entry.
+Both roles navigate to `/home` (Home / Dashboard screen) after successful PIN entry.
+
+### go_router Route Changes (v1.2)
+- `/home` — new HomeScreen (replaces `/entry` as default post-auth destination)
+- `/entry` — **removed** (no longer a standalone route; BookingForm is always modal)
+- `/daily`, `/monthly`, `/settings/*` — unchanged
 
 ---
 
-## 8. Open Design Decisions
+## 9. Open Design Decisions
 
 | # | Decision | Options | Status |
 |---|---|---|---|
@@ -390,3 +535,36 @@ Both roles navigate to `/daily` after successful PIN entry.
 | 5 | Inline edit vs. edit screen | Settings items expand inline vs. navigate to dedicated edit screen | **Decided: inline for v1** |
 | 6 | Heatmap brackets when room filter active | Single-room view has lower revenue — brackets may need adjusting or switch to percentiles | **Open** |
 | 7 | Theme | Dynamic (follows OS setting), default fallback = light mode | **Decided: dynamic, light default** |
+| 8 | Payment Pending scope | Show ALL pending groups (unbounded) vs. cap to current month or recent N days | **Open** |
+| 9 | Home screen refresh | Manual pull-to-refresh only vs. auto-refresh on app foreground | **Open** |
+| 10 | Greeting personalisation | Static "Good morning/afternoon/evening" vs. include property name in greeting | **Open** |
+
+---
+
+## Appendix — v1.2 Change Summary
+
+This version adds the Home / Dashboard screen and makes the following changes to existing screens and documentation.
+
+### New
+- **Screen 2 — Home / Dashboard** (new screen, replaces Entry tab)
+- **HomeCubit** — new feature-level cubit with 5 parallel data queries
+- **FAB** — floating action button on Home screen as primary new-booking entry point
+- **UpcomingCard** component — date-grouped card for upcoming check-ins section
+- **NewBookingRow** component — compact row for new bookings today section
+
+### Changed
+- **Bottom nav:** "Entry" tab (pencil-plus) → "Home" tab (grid/dashboard icon) on all screens
+- **Default post-auth route:** `/daily` → `/home`
+- **Route guard redirect:** Settings guard now redirects to `/home` instead of `/daily`
+- **BookingForm trigger points:** FAB on Home added as entry point; Entry tab route removed
+- **go_router routes:** `/entry` removed; `/home` added
+
+### Unchanged
+- All colour tokens and theme system
+- BookingForm fields, validation, and conflict flow
+- Daily screen layout and behaviour
+- Monthly screen layout and behaviour
+- Settings screen layout and behaviour
+- All database schema and API contracts
+- Role-based access control (staff cannot access Settings)
+- PIN authentication screen

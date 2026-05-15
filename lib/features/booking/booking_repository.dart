@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/constants.dart';
+import '../../shared/models/booking_group.dart';
 import 'booking_group_input.dart';
 
 class ConflictInfo {
@@ -168,6 +169,17 @@ class BookingRepository {
         .update({'amount': input.perNightAmount})
         .eq('booking_group_id', groupId)
         .eq('is_active', true);
+  }
+
+  Future<BookingGroup> fetchGroupById(String groupId) async {
+    final row = await _client
+        .from('booking_groups')
+        .select('*')
+        .eq('id', groupId)
+        .eq('property_id', AppConstants.propertyId)
+        .eq('is_active', true)
+        .single();
+    return BookingGroup.fromJson(row);
   }
 
   String _fmt(DateTime date) =>

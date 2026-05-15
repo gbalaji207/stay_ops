@@ -73,7 +73,7 @@ class _PinScreenState extends State<PinScreen> with TickerProviderStateMixin {
     return BlocListener<AuthCubit, AuthState>(
       listener: (context, state) {
         if (state is AuthAuthenticated) {
-          context.go('/daily');
+          context.go('/home');
         } else if (state is AuthError) {
           setState(() {
             _isError = true;

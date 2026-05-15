@@ -2,7 +2,7 @@
 
 **Product:** StayOps — Hospitality Income Tracker
 **Stack:** Flutter (Android APK) · Supabase (Cloud BaaS)
-**Version:** 1.1
+**Version:** 1.2
 **Date:** May 2026
 
 ---
@@ -25,6 +25,7 @@
 14. [API Contract](#14-api-contract)
 15. [Non-Functional Requirements](#15-non-functional-requirements)
 16. [Future Considerations](#16-future-considerations)
+17. [v1.2 Change Summary](#17-v12-change-summary)
 
 ---
 
@@ -58,8 +59,8 @@ StayOps is a mobile-first income tracking app for small hospitality operators. I
 │                 Flutter Android APK                          │
 │                                                              │
 │  ┌─────────────┐  ┌──────────────┐  ┌──────────────────┐   │
-│  │  PIN Auth   │  │  Booking     │  │  Monthly/Daily   │   │
-│  │  (local)    │  │  Entry/Edit  │  │  Views           │   │
+│  │  PIN Auth   │  │  Booking     │  │  Home / Daily /  │   │
+│  │  (local)    │  │  Entry/Edit  │  │  Monthly Views   │   │
 │  └─────────────┘  └──────────────┘  └──────────────────┘   │
 └──────────────────────────┬──────────────────────────────────┘
                            │ HTTPS / REST
@@ -96,10 +97,11 @@ StayOps is a mobile-first income tracking app for small hospitality operators. I
 | Booking model | Hybrid — one DB row per night + booking_group | Simple per-day queries; group tracks total amount and payment status |
 | Amount split | Equal split across nights, decimal allowed | e.g. ₹9900 / 3 nights = ₹3300.00 per night |
 | Payment status | Boolean at group level | Settled per booking group, not per night |
-| Config loading | Loaded at session start post-auth, for all roles | Staff needs config for Entry form dropdowns |
+| Config loading | Loaded at session start post-auth, for all roles | Staff needs config for BookingForm dropdowns |
 | Conflict handling | Show warning → user confirms → overwrite | Operator has authority over their own data |
 | OTA/source config | Stored in Supabase per property | Owner manages from Settings screen |
 | APK distribution | Direct APK file share | No Play Store overhead for internal-use app |
+| Home / Dashboard | Replaces Entry tab as first nav tab | Operational at-a-glance view; FAB handles new booking entry |
 
 ---
 
@@ -111,19 +113,19 @@ StayOps is a mobile-first income tracking app for small hospitality operators. I
 │                                                                 │
 │  ┌───────────────────────────────────────────────────────┐     │
 │  │  Presentation Layer (Screens + Widgets)                │     │
-│  │  PINScreen · EntryScreen · DailyScreen                 │     │
+│  │  PINScreen · HomeScreen · DailyScreen                  │     │
 │  │  MonthlyScreen · SettingsScreen (owner only)           │     │
 │  └───────────────────────┬───────────────────────────────┘     │
 │                          │                                      │
 │  ┌───────────────────────▼───────────────────────────────┐     │
 │  │  State Layer (Cubits)                                  │     │
-│  │  AuthCubit · ConfigCubit · BookingCubit                │     │
+│  │  AuthCubit · ConfigCubit · BookingCubit · HomeCubit    │     │
 │  │  DailyCubit · MonthlyCubit · SettingsCubit             │     │
 │  └───────────────────────┬───────────────────────────────┘     │
 │                          │                                      │
 │  ┌───────────────────────▼───────────────────────────────┐     │
 │  │  Repository Layer                                      │     │
-│  │  BookingRepository · ConfigRepository                  │     │
+│  │  BookingRepository · ConfigRepository · HomeRepository │     │
 │  └───────────────────────┬───────────────────────────────┘     │
 │                          │                                      │
 │  ┌───────────────────────▼───────────────────────────────┐     │
@@ -475,11 +477,23 @@ lib/
 │   │   └── repository/
 │   │       └── config_repository.dart
 │   │
-│   ├── booking/
+│   ├── home/                         # Home / Dashboard screen
 │   │   ├── screens/
-│   │   │   └── entry_screen.dart
+│   │   │   └── home_screen.dart
 │   │   ├── widgets/
-│   │   │   └── booking_form.dart     # Shared by Entry + Daily tap + Monthly tap
+│   │   │   ├── booking_card.dart     # Check-out / check-in / pending cards
+│   │   │   ├── occupancy_strip.dart  # Occupied / Vacant / % strip
+│   │   │   ├── upcoming_card.dart    # Date-grouped upcoming check-ins
+│   │   │   └── new_booking_row.dart  # Compact new-bookings-today row
+│   │   ├── cubit/
+│   │   │   ├── home_cubit.dart
+│   │   │   └── home_state.dart
+│   │   └── repository/
+│   │       └── home_repository.dart
+│   │
+│   ├── booking/
+│   │   ├── widgets/
+│   │   │   └── booking_form.dart     # Shared by FAB + Daily tap + Monthly tap
 │   │   ├── cubit/
 │   │   │   ├── booking_cubit.dart
 │   │   │   └── booking_state.dart
@@ -516,7 +530,8 @@ lib/
     │   ├── booking_type.dart
     │   ├── booking_source.dart
     │   ├── booking_group.dart
-    │   └── booking_day.dart
+    │   ├── booking_day.dart
+    │   └── occupancy_snapshot.dart
     └── widgets/
         ├── stat_card.dart
         └── conflict_dialog.dart
@@ -529,9 +544,9 @@ dependencies:
   flutter:
     sdk: flutter
   supabase_flutter: ^2.x
-  flutter_bloc: ^9.x          # Cubit
-  go_router: ^17.x            # Navigation + route guards
-  intl: ^0.20                 # Date/currency formatting
+  flutter_bloc: ^8.x          # Cubit
+  go_router: ^13.x            # Navigation + route guards
+  intl: ^0.19                 # Date/currency formatting
   equatable: ^2.x             # State equality for Cubit
 ```
 
@@ -563,10 +578,10 @@ App Launch
 PIN Screen
     │
     ├── Match ownerPin → AuthCubit.authenticated(role: owner)
-    │       └── Load ConfigCubit → Navigate to /daily
+    │       └── Load ConfigCubit → Navigate to /home
     │
     ├── Match staffPin → AuthCubit.authenticated(role: staff)
-    │       └── Load ConfigCubit → Navigate to /daily
+    │       └── Load ConfigCubit → Navigate to /home
     │
     └── No match → AuthCubit.error("Incorrect PIN") → show error, stay on PIN screen
 ```
@@ -611,7 +626,7 @@ BlocListener<AuthCubit, AuthState>(
   listener: (context, state) {
     if (state is AuthAuthenticated) {
       context.read<ConfigCubit>().loadConfig();  // load for ALL roles
-      context.go('/daily');
+      context.go('/home');
     }
   },
 )
@@ -625,7 +640,7 @@ redirect: (context, state) {
   if (auth is! AuthAuthenticated) return '/pin';
 
   if (state.matchedLocation.startsWith('/settings')) {
-    if ((auth as AuthAuthenticated).role != UserRole.owner) return '/daily';
+    if ((auth as AuthAuthenticated).role != UserRole.owner) return '/home';
   }
   return null;
 }
@@ -641,6 +656,7 @@ redirect: (context, state) {
 |-------|-------|----------------|
 | `AuthCubit` | App-level | PIN verification, role, session |
 | `ConfigCubit` | App-level | Rooms, booking types, sources — loaded once post-auth |
+| `HomeCubit` | Feature-level | Load all dashboard sections in parallel; refresh on demand |
 | `BookingCubit` | Feature-level | Save, edit, conflict check for booking groups |
 | `DailyCubit` | Feature-level | Load daily room status, fetch group by day |
 | `MonthlyCubit` | Feature-level | Load month bookings, compute day stats |
@@ -681,7 +697,7 @@ class ConfigCubit extends Cubit<ConfigState> {
 }
 ```
 
-> `ConfigCubit` is provided at app root so both Entry form and Settings screen read from the same cached state.
+> `ConfigCubit` is provided at app root so both BookingForm and Settings screen read from the same cached state.
 
 ### 9.3 BookingCubit — Save & Edit
 
@@ -729,6 +745,58 @@ class BookingCubit extends Cubit<BookingState> {
 }
 ```
 
+### 9.4 HomeCubit — Dashboard Data
+
+```dart
+// States
+class HomeLoading extends HomeState {}
+class HomeLoaded extends HomeState {
+  final List<BookingGroup> checkOuts;        // check_out = today
+  final List<BookingGroup> checkIns;         // check_in = today
+  final OccupancySnapshot occupancy;         // occupied / vacant / pct for today
+  final Map<DateTime, List<BookingGroup>> upcoming;  // check_in in next 3 days, grouped by date
+  final List<BookingGroup> newToday;         // created_at date = today
+  final List<BookingGroup> paymentPending;   // payment_received = false
+}
+class HomeError extends HomeState {
+  final String message;
+}
+
+// Key method
+class HomeCubit extends Cubit<HomeState> {
+  final HomeRepository _repo;
+
+  Future<void> load() async {
+    emit(HomeLoading());
+    try {
+      // All 6 queries run in parallel
+      final results = await Future.wait([
+        _repo.fetchCheckOuts(today),
+        _repo.fetchCheckIns(today),
+        _repo.fetchOccupancy(today),
+        _repo.fetchUpcoming(today, days: 3),
+        _repo.fetchNewToday(today),
+        _repo.fetchPaymentPending(),
+      ]);
+      emit(HomeLoaded(
+        checkOuts: results[0],
+        checkIns: results[1],
+        occupancy: results[2],
+        upcoming: results[3],
+        newToday: results[4],
+        paymentPending: results[5],
+      ));
+    } catch (e) {
+      emit(HomeError(e.toString()));
+    }
+  }
+
+  Future<void> refresh() => load();
+}
+```
+
+> `HomeCubit` is feature-level — created when `HomeScreen` is mounted. All 6 queries are fired in parallel via `Future.wait` to minimise total load time. `HomeRepository` owns all dashboard queries; they are not shared with `BookingRepository`.
+
 ---
 
 ## 10. Screen & Navigation Design
@@ -738,17 +806,17 @@ class BookingCubit extends Cubit<BookingState> {
 ```
 PINScreen
     │
-    └── HomeShell (Bottom Nav: Entry | Daily | Monthly | Settings*)
+    └── HomeShell (Bottom Nav: Home | Daily | Monthly | Settings*)
             │
-            ├── EntryScreen
-            │       └── BookingForm (modal bottom sheet)
-            │               ├── Date range picker (check-in / check-out)
-            │               ├── Room dropdown
-            │               ├── Booking Type selector
-            │               ├── Booking Source selector (filtered by type)
-            │               ├── Total Amount field (₹)
-            │               ├── Payment Received toggle (group level)
-            │               └── Notes field
+            ├── HomeScreen (Dashboard)
+            │       ├── Section: Today's Check-outs
+            │       ├── Section: Today's Check-ins
+            │       ├── Section: Occupancy Today
+            │       ├── Section: Upcoming Check-ins (next 3 days)
+            │       ├── Section: New Bookings Today
+            │       ├── Section: Payment Pending
+            │       ├── Any booking card tap → BookingForm (pre-filled with full group)
+            │       └── FAB → BookingForm (new booking, no pre-fills)
             │
             ├── DailyScreen
             │       └── Room card tap → BookingForm (pre-filled with full group)
@@ -762,20 +830,31 @@ PINScreen
                     └── BookingSourceConfigScreen
 
 * Settings tab hidden for STAFF role
+BookingForm is always a modal bottom sheet — no standalone screen route
 ```
 
 ### 10.2 Bottom Navigation
 
 | Tab | Icon | Visible To |
 |-----|------|------------|
-| Entry | ✏️ | Owner, Staff |
+| Home | grid/dashboard | Owner, Staff |
 | Daily | 📅 | Owner, Staff |
 | Monthly | 🗓 | Owner, Staff |
 | Settings | ⚙️ | Owner only (hidden for Staff) |
 
 ### 10.3 Entry / Edit Form — BookingForm
 
-The same `BookingForm` widget is used for new entry and editing an existing group. It receives an optional `BookingGroup?` — if non-null, all fields are pre-filled.
+The same `BookingForm` widget is used for new entry and editing an existing group. It receives an optional `BookingGroup?` — if non-null, all fields are pre-filled. It is always presented as a modal bottom sheet; there is no standalone screen route.
+
+**Trigger points:**
+
+| Trigger | Mode | Pre-filled fields |
+|---------|------|-------------------|
+| FAB on HomeScreen | New | None |
+| Home — booking card tap | Edit | All fields from `booking_group` |
+| Daily — vacant card tap | New | Room, check-in date |
+| Daily — booked card tap | Edit | All fields from `booking_group` |
+| Monthly — day detail row tap | Edit | All fields from `booking_group` |
 
 **Fields:**
 
@@ -815,7 +894,70 @@ The same `BookingForm` widget is used for new entry and editing an existing grou
 
 ## 11. Data Flow Diagrams
 
-### 11.1 Save New Booking Group
+### 11.1 Load Home Dashboard
+
+```
+User navigates to Home tab (or app launches post-auth)
+        │
+        ▼
+HomeCubit.load()
+        │
+        ▼
+HomeRepository — 6 queries fired in parallel via Future.wait:
+        │
+        ├── fetchCheckOuts(today)
+        │     GET /booking_groups
+        │       ?property_id=eq.<id>
+        │       &check_out=eq.<today>
+        │       &is_active=eq.true
+        │       &select=*,booking_types(*),booking_sources(*),rooms(*)
+        │
+        ├── fetchCheckIns(today)
+        │     GET /booking_groups
+        │       ?property_id=eq.<id>
+        │       &check_in=eq.<today>
+        │       &is_active=eq.true
+        │       &select=*,booking_types(*),booking_sources(*),rooms(*)
+        │
+        ├── fetchOccupancy(today)
+        │     GET /booking_days
+        │       ?property_id=eq.<id>
+        │       &booking_date=eq.<today>
+        │       &is_active=eq.true
+        │       &select=room_id
+        │     → occupied = COUNT(rows), vacant = totalRooms − occupied
+        │
+        ├── fetchUpcoming(today, days: 3)
+        │     GET /booking_groups
+        │       ?property_id=eq.<id>
+        │       &check_in=gte.<today+1>&check_in=lte.<today+3>
+        │       &is_active=eq.true
+        │       &select=*,booking_types(*),booking_sources(*),rooms(*)
+        │       &order=check_in.asc
+        │     → grouped by check_in date in app
+        │
+        ├── fetchNewToday(today)
+        │     GET /booking_groups
+        │       ?property_id=eq.<id>
+        │       &created_at=gte.<today 00:00:00>
+        │       &created_at=lte.<today 23:59:59>
+        │       &is_active=eq.true
+        │       &select=*,booking_types(*),booking_sources(*),rooms(*)
+        │
+        └── fetchPaymentPending()
+              GET /booking_groups
+                ?property_id=eq.<id>
+                &payment_received=eq.false
+                &is_active=eq.true
+                &select=*,booking_types(*),booking_sources(*),rooms(*)
+                &order=check_in.asc
+        │
+        ▼
+HomeLoaded state → HomeScreen renders all 6 sections
+Empty sections display italic grey empty-state text (never hidden)
+```
+
+### 11.2 Save New Booking Group
 
 ```
 User fills BookingForm and taps Save
@@ -844,7 +986,7 @@ BookingRepository.checkConflicts(roomId, nightDates)
                                     └── Emit BookingSaved
 ```
 
-### 11.2 Edit Booking — Daily View Tap
+### 11.3 Edit Booking — Daily View Tap
 
 ```
 User taps Room 101 on Daily view (date = May 14)
@@ -871,7 +1013,7 @@ BookingForm opens pre-filled:
 User edits and saves → same conflict check + save flow as 11.1
 ```
 
-### 11.3 Edit — Date Range Shortened
+### 11.4 Edit — Date Range Shortened
 
 ```
 User changes check-out from May 16 → May 15 (removes May 15 night)
@@ -888,7 +1030,7 @@ BookingRepository.updateBookingGroup(group):
   4. UPDATE remaining booking_days amounts (recalculate split)
 ```
 
-### 11.4 Load Monthly Calendar
+### 11.5 Load Monthly Calendar
 
 ```
 User opens Monthly tab or changes month/room filter
@@ -919,7 +1061,7 @@ Map to DayStats per date:
 MonthlyScreen renders heatmap
 ```
 
-### 11.5 Config Load (Post-Auth, All Roles)
+### 11.6 Config Load (Post-Auth, All Roles)
 
 ```
 AuthCubit emits AuthAuthenticated
@@ -935,7 +1077,7 @@ ConfigCubit.loadConfig()
 ConfigLoaded state — cached for entire session
         │
         ▼
-Entry form, Daily form, Monthly filter all read from ConfigCubit
+BookingForm (via FAB or card tap), Daily form, Monthly filter all read from ConfigCubit
 ```
 
 ---
@@ -963,7 +1105,7 @@ BookingSource dropdown  ←  ConfigCubit.bookingSources
 
 ### 12.3 Settings → Config Refresh
 
-After any settings change (add/edit/delete/reorder), `SettingsCubit` calls `ConfigCubit.reload()` to refresh the session cache. Staff users on the Entry screen will see updated options on next form open.
+After any settings change (add/edit/delete/reorder), `SettingsCubit` calls `ConfigCubit.reload()` to refresh the session cache. Staff users will see updated options on the next `BookingForm` open.
 
 ### 12.4 Soft-Delete Behaviour in Config
 
@@ -979,7 +1121,8 @@ When a booking type or source is soft-deleted (`is_active = false`):
 | Feature | Owner | Staff |
 |---------|-------|-------|
 | PIN login | ✅ (owner PIN) | ✅ (staff PIN) |
-| Add booking | ✅ | ✅ |
+| Home / Dashboard view | ✅ | ✅ |
+| Add booking (via FAB) | ✅ | ✅ |
 | Edit booking | ✅ | ✅ |
 | Daily view | ✅ | ✅ |
 | Monthly view | ✅ | ✅ |
@@ -1075,6 +1218,51 @@ PATCH /booking_days?booking_group_id=eq.<id>&is_active=eq.true
   Body: { amount: <new_per_night_amount> }
 ```
 
+### 14.8 Home Dashboard Queries
+
+All 6 queries are fired in parallel. All filter on `property_id` and `is_active`.
+
+```
+-- Today's check-outs
+GET /booking_groups
+  ?property_id=eq.<id>&check_out=eq.<today>&is_active=eq.true
+  &select=*,booking_types(*),booking_sources(*),rooms(*)
+
+-- Today's check-ins
+GET /booking_groups
+  ?property_id=eq.<id>&check_in=eq.<today>&is_active=eq.true
+  &select=*,booking_types(*),booking_sources(*),rooms(*)
+
+-- Occupancy today (count of booked booking_days rows for the date)
+GET /booking_days
+  ?property_id=eq.<id>&booking_date=eq.<today>&is_active=eq.true
+  &select=room_id
+
+-- Upcoming check-ins (next 3 days)
+GET /booking_groups
+  ?property_id=eq.<id>
+  &check_in=gte.<today+1>&check_in=lte.<today+3>
+  &is_active=eq.true
+  &select=*,booking_types(*),booking_sources(*),rooms(*)
+  &order=check_in.asc
+
+-- New bookings entered today
+GET /booking_groups
+  ?property_id=eq.<id>
+  &created_at=gte.<today 00:00:00+05:30>
+  &created_at=lte.<today 23:59:59+05:30>
+  &is_active=eq.true
+  &select=*,booking_types(*),booking_sources(*),rooms(*)
+
+-- Payment pending (all active unpaid groups)
+GET /booking_groups
+  ?property_id=eq.<id>&payment_received=eq.false&is_active=eq.true
+  &select=*,booking_types(*),booking_sources(*),rooms(*)
+  &order=check_in.asc
+```
+
+> **Timezone note:** `created_at` is stored as `TIMESTAMPTZ`. Filter boundaries for "new today" must use the property's local timezone offset (IST = UTC+5:30). Compute `today 00:00:00+05:30` and `today 23:59:59+05:30` in the app before building the query string.
+
 ---
 
 ## 15. Non-Functional Requirements
@@ -1083,6 +1271,7 @@ PATCH /booking_days?booking_group_id=eq.<id>&is_active=eq.true
 |-------------|--------|----------|
 | App launch to PIN screen | < 2s | Supabase init deferred to post-auth |
 | Config load time | < 1s | 3 small queries, cached for session |
+| Home dashboard load time | < 1.5s | 6 parallel queries via Future.wait |
 | Monthly load time | < 1.5s | Single JOIN query for full month |
 | Daily load time | < 0.5s | Single date filter query |
 | APK size | < 25 MB | Flutter release build, no heavy assets |
@@ -1136,3 +1325,44 @@ PATCH /booking_days?booking_group_id=eq.<id>&is_active=eq.true
 | Soft-delete on range change | Removed nights set is_active = false, amount preserved |
 | Conflict resolution | Warning dialog → user confirms → overwrite (soft-delete old, insert new) |
 | Single-night booking | Same model — 1 night group, 1 booking_days row |
+
+---
+
+## 17. v1.2 Change Summary
+
+### New Additions
+| Item | Detail |
+|------|--------|
+| `HomeScreen` | New dashboard screen replacing `EntryScreen` as first tab. 6 sections: check-outs, check-ins, occupancy, upcoming, new today, pending payments. |
+| `HomeCubit` | Feature-level cubit. 6 parallel queries via `Future.wait`. States: `HomeLoading`, `HomeLoaded`, `HomeError`. |
+| `HomeRepository` | New repository owning all dashboard queries. Not shared with `BookingRepository`. |
+| `OccupancySnapshot` model | Holds occupied count, vacant count, occupancy % for a given date. |
+| `home/` feature folder | `home_screen.dart`, `home_cubit.dart`, `home_state.dart`, `home_repository.dart`, and 4 widget files. |
+| Section 11.1 (data flow) | New data flow diagram for Home dashboard load. |
+| Section 14.8 (API) | New API contract entries for all 6 dashboard queries. |
+| FAB | Floating action button on HomeScreen — primary new-booking entry point for both roles. |
+
+### Changed
+| Item | Before (v1.1) | After (v1.2) |
+|------|---------------|--------------|
+| First tab label/icon | "Entry" (pencil-plus) | "Home" (grid/dashboard) |
+| Default post-auth route | `/daily` | `/home` |
+| Settings guard redirect | → `/daily` | → `/home` |
+| `BlocListener` navigation | `context.go('/daily')` | `context.go('/home')` |
+| Folder: `booking/screens/` | `entry_screen.dart` | Removed — no standalone entry screen |
+| `BookingForm` comment | "Shared by Entry + Daily tap + Monthly tap" | "Shared by FAB + Daily tap + Monthly tap" |
+| Cubit inventory | 6 cubits | 7 cubits (HomeCubit added) |
+| Repository layer | `BookingRepository · ConfigRepository` | `BookingRepository · ConfigRepository · HomeRepository` |
+| NFR table | 4 load-time targets | 5 load-time targets (Home dashboard added) |
+| Architecture decisions table | 12 rows | 13 rows (Home/Dashboard decision added) |
+
+### Unchanged
+- All database schema (no schema changes in v1.2)
+- All existing API contracts (14.1–14.7)
+- BookingForm fields, validation, and conflict flow
+- Daily screen layout and behaviour
+- Monthly screen layout and behaviour
+- Settings screen layout and behaviour
+- PIN authentication screen
+- Role-based access control (staff cannot access Settings)
+- All colour tokens and theme system

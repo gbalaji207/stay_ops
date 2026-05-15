@@ -7,7 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'core/constants.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/auth_cubit.dart';
-import 'features/booking/entry_screen.dart';
+import 'features/home/screens/home_screen.dart';
 import 'features/config/config_cubit.dart';
 import 'features/config/config_repository.dart';
 import 'features/daily/daily_screen.dart';
@@ -45,10 +45,10 @@ GoRouter _buildRouter(AuthCubit authCubit) {
 
       if (auth is! AuthAuthenticated) return onPin ? null : '/pin';
       // Authenticated: block back-navigation to /pin
-      if (onPin) return '/daily';
+      if (onPin) return '/home';
       // Settings guard
       if (state.matchedLocation.startsWith('/settings')) {
-        if (auth.role != UserRole.owner) return '/daily';
+        if (auth.role != UserRole.owner) return '/home';
       }
       return null;
     },
@@ -61,8 +61,8 @@ GoRouter _buildRouter(AuthCubit authCubit) {
         builder: (context, state, child) => HomeShell(child: child),
         routes: [
           GoRoute(
-            path: '/entry',
-            builder: (_, _) => const EntryScreen(),
+            path: '/home',
+            builder: (_, _) => const HomeScreen(),
           ),
           GoRoute(
             path: '/daily',
@@ -146,8 +146,8 @@ class HomeShell extends StatelessWidget {
             onTap: (index) => _onTap(context, index, isOwner),
             items: [
               const BottomNavigationBarItem(
-                icon: Icon(Icons.edit_note),
-                label: 'Entry',
+                icon: Icon(Icons.dashboard_rounded),
+                label: 'Home',
               ),
               const BottomNavigationBarItem(
                 icon: Icon(Icons.calendar_today),
@@ -170,7 +170,7 @@ class HomeShell extends StatelessWidget {
   }
 
   int _indexFromLocation(String location, bool isOwner) {
-    if (location.startsWith('/entry')) return 0;
+    if (location.startsWith('/home')) return 0;
     if (location.startsWith('/daily')) return 1;
     if (location.startsWith('/monthly')) return 2;
     if (isOwner && location.startsWith('/settings')) return 3;
@@ -178,7 +178,7 @@ class HomeShell extends StatelessWidget {
   }
 
   void _onTap(BuildContext context, int index, bool isOwner) {
-    const paths = ['/entry', '/daily', '/monthly', '/settings'];
+    const paths = ['/home', '/daily', '/monthly', '/settings'];
     if (index < paths.length) context.go(paths[index]);
   }
 }
