@@ -13,6 +13,8 @@ class BookingGroup extends Equatable {
     this.bookingSourceId,
     this.notes,
     required this.isActive,
+    this.paymentDestinationId,
+    this.paymentDestinationName,
   });
 
   final String id;
@@ -26,11 +28,14 @@ class BookingGroup extends Equatable {
   final String? bookingSourceId;
   final String? notes;
   final bool isActive;
+  final String? paymentDestinationId;
+  final String? paymentDestinationName;
 
   int get nights => checkOut.difference(checkIn).inDays;
   double get perNightAmount => nights > 0 ? totalAmount / nights : 0;
 
   factory BookingGroup.fromJson(Map<String, dynamic> json) {
+    final destMap = json['payment_destinations'] as Map<String, dynamic>?;
     return BookingGroup(
       id: json['id'] as String,
       propertyId: json['property_id'] as String,
@@ -43,13 +48,25 @@ class BookingGroup extends Equatable {
       bookingSourceId: json['booking_source_id'] as String?,
       notes: json['notes'] as String?,
       isActive: json['is_active'] as bool,
+      paymentDestinationId: json['payment_destination_id'] as String?,
+      paymentDestinationName: destMap?['name'] as String?,
     );
   }
 
   @override
   List<Object?> get props => [
-        id, propertyId, roomId, checkIn, checkOut,
-        totalAmount, paymentReceived, bookingTypeId,
-        bookingSourceId, notes, isActive,
+        id,
+        propertyId,
+        roomId,
+        checkIn,
+        checkOut,
+        totalAmount,
+        paymentReceived,
+        bookingTypeId,
+        bookingSourceId,
+        notes,
+        isActive,
+        paymentDestinationId,
+        paymentDestinationName,
       ];
 }

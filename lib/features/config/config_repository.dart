@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/constants.dart';
 import '../../shared/models/booking_source.dart';
 import '../../shared/models/booking_type.dart';
+import '../../shared/models/payment_destination.dart';
 import '../../shared/models/room.dart';
 
 class ConfigRepository {
@@ -35,12 +36,24 @@ class ConfigRepository {
   Future<List<BookingSource>> fetchBookingSources() async {
     final response = await _client
         .from('booking_sources')
-        .select()
+        .select('*,payment_destinations(id,name)')
         .eq('property_id', AppConstants.propertyId)
         .eq('is_active', true)
         .order('sort_order', ascending: true);
     return (response as List)
         .map((e) => BookingSource.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<List<PaymentDestination>> fetchPaymentDestinations() async {
+    final response = await _client
+        .from('payment_destinations')
+        .select()
+        .eq('property_id', AppConstants.propertyId)
+        .eq('is_active', true)
+        .order('sort_order', ascending: true);
+    return (response as List)
+        .map((e) => PaymentDestination.fromJson(e as Map<String, dynamic>))
         .toList();
   }
 }

@@ -4,6 +4,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../core/theme/app_theme.dart';
 import '../../shared/models/booking_source.dart';
 import '../../shared/models/booking_type.dart';
+import '../../shared/models/payment_destination.dart';
+import '../config/config_cubit.dart';
 import 'settings_cubit.dart';
 import 'settings_widgets.dart';
 
@@ -18,6 +20,7 @@ class BookingSourceConfigScreen extends StatefulWidget {
 class _BookingSourceConfigScreenState
     extends State<BookingSourceConfigScreen> {
   String? _editingId;
+  String? _editingDestinationId; // destination selected during inline edit
   String? _selectedTypeId;
   String? _addTypeId;
   final _editController = TextEditingController();
@@ -41,33 +44,41 @@ class _BookingSourceConfigScreenState
     setState(() {
       _editingId = source.id;
       _editController.text = source.name;
+      _editingDestinationId = source.defaultPaymentDestinationId;
     });
   }
 
   void _cancelEdit() {
     setState(() {
       _editingId = null;
+      _editingDestinationId = null;
       _editController.clear();
     });
   }
 
   Future<void> _saveEdit(BookingSource source) async {
     final name = _editController.text.trim();
-    if (name.isEmpty || name == source.name) {
+    if (name.isEmpty) {
       _cancelEdit();
       return;
     }
     setState(() => _saving = true);
-    await context.read<SettingsCubit>().updateBookingSource(source.id, name);
-    if (mounted) setState(() { _saving = false; _editingId = null; });
+    final cubit = context.read<SettingsCubit>();
+    final destId = _editingDestinationId;
+    // Only update name if it changed
+    if (name != source.name) {
+      await cubit.updateBookingSource(source.id, name);
+    }
+    // Always save destination mapping (even if unchanged — idempotent)
+    await cubit.updateBookingSourceDefaultDestination(source.id, destId);
+    if (mounted) setState(() { _saving = false; _editingId = null; _editingDestinationId = null; });
   }
 
   Future<void> _toggleActive(BookingSource source) async {
     setState(() => _saving = true);
-    await context
-        .read<SettingsCubit>()
-        .setBookingSourceActive(source.id, isActive: !source.isActive);
-    if (mounted) setState(() { _saving = false; _editingId = null; });
+    final cubit = context.read<SettingsCubit>();
+    await cubit.setBookingSourceActive(source.id, isActive: !source.isActive);
+    if (mounted) setState(() { _saving = false; _editingId = null; _editingDestinationId = null; });
   }
 
   Future<void> _addSource() async {
@@ -75,7 +86,8 @@ class _BookingSourceConfigScreenState
     final typeId = _addTypeId ?? _selectedTypeId;
     if (name.isEmpty || typeId == null) return;
     setState(() => _saving = true);
-    await context.read<SettingsCubit>().addBookingSource(name, typeId);
+    final cubit = context.read<SettingsCubit>();
+    await cubit.addBookingSource(name, typeId);
     if (mounted) {
       _addController.clear();
       setState(() => _saving = false);
@@ -119,10 +131,17 @@ class _BookingSourceConfigScreenState
               _selectedTypeId = state.bookingTypes.first.id;
               _addTypeId = state.bookingTypes.first.id;
             }
+            // Get active payment destinations for the dropdown
+            final configState = context.read<ConfigCubit>().state;
+            final activeDestinations = configState is ConfigLoaded
+                ? configState.paymentDestinations
+                : <PaymentDestination>[];
+
             return _buildContent(
               context,
               state.bookingTypes,
               state.bookingSources,
+              activeDestinations,
               colors,
             );
           }
@@ -136,6 +155,7 @@ class _BookingSourceConfigScreenState
     BuildContext context,
     List<BookingType> types,
     List<BookingSource> allSources,
+    List<PaymentDestination> destinations,
     AppColors colors,
   ) {
     final filteredSources = _selectedTypeId == null
@@ -158,6 +178,7 @@ class _BookingSourceConfigScreenState
               _selectedTypeId = id;
               _addTypeId = id;
               _editingId = null;
+              _editingDestinationId = null;
             }),
           ),
           const SizedBox(height: 16),
@@ -190,11 +211,15 @@ class _BookingSourceConfigScreenState
                       isEditing: _editingId == filteredSources[i].id,
                       isSaving: _saving,
                       editController: _editController,
+                      editingDestinationId: _editingDestinationId,
+                      destinations: destinations,
                       colors: colors,
                       onEditTap: () => _startEdit(filteredSources[i]),
                       onSave: () => _saveEdit(filteredSources[i]),
                       onCancel: _cancelEdit,
                       onToggleActive: () => _toggleActive(filteredSources[i]),
+                      onDestinationChanged: (id) =>
+                          setState(() => _editingDestinationId = id),
                     ),
                     if (i < filteredSources.length - 1)
                       Divider(
@@ -283,11 +308,14 @@ class _SourceRow extends StatelessWidget {
     required this.isEditing,
     required this.isSaving,
     required this.editController,
+    required this.editingDestinationId,
+    required this.destinations,
     required this.colors,
     required this.onEditTap,
     required this.onSave,
     required this.onCancel,
     required this.onToggleActive,
+    required this.onDestinationChanged,
   });
 
   final BookingSource source;
@@ -295,11 +323,14 @@ class _SourceRow extends StatelessWidget {
   final bool isEditing;
   final bool isSaving;
   final TextEditingController editController;
+  final String? editingDestinationId;
+  final List<PaymentDestination> destinations;
   final AppColors colors;
   final VoidCallback onEditTap;
   final VoidCallback onSave;
   final VoidCallback onCancel;
   final VoidCallback onToggleActive;
+  final ValueChanged<String?> onDestinationChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -339,6 +370,16 @@ class _SourceRow extends StatelessWidget {
                           style: TextStyle(
                             fontSize: 11,
                             color: colors.textSecondary,
+                          ),
+                        ),
+                      // Destination mapping subtitle
+                      if (!isEditing &&
+                          source.defaultPaymentDestinationName != null)
+                        Text(
+                          '→ ${source.defaultPaymentDestinationName}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: colors.textHint,
                           ),
                         ),
                     ],
@@ -388,6 +429,50 @@ class _SourceRow extends StatelessWidget {
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(6),
                           borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    // Default payment destination dropdown
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      decoration: BoxDecoration(
+                        color: colors.surface,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: editingDestinationId,
+                          isExpanded: true,
+                          hint: Text(
+                            '— None —',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: colors.textHint,
+                            ),
+                          ),
+                          dropdownColor: colors.surface,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: colors.textPrimary,
+                          ),
+                          iconEnabledColor: colors.textSecondary,
+                          items: [
+                            DropdownMenuItem<String>(
+                              value: null,
+                              child: Text(
+                                '— None —',
+                                style: TextStyle(color: colors.textHint),
+                              ),
+                            ),
+                            ...destinations.map(
+                              (d) => DropdownMenuItem<String>(
+                                value: d.id,
+                                child: Text(d.name),
+                              ),
+                            ),
+                          ],
+                          onChanged: isSaving ? null : onDestinationChanged,
                         ),
                       ),
                     ),

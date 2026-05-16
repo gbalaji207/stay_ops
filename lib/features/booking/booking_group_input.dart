@@ -9,6 +9,7 @@ class BookingGroupInput {
     this.bookingTypeId,
     this.bookingSourceId,
     this.notes,
+    this.paymentDestinationId,
   });
 
   // null = new booking, non-null = editing existing group
@@ -21,6 +22,7 @@ class BookingGroupInput {
   final String? bookingTypeId;
   final String? bookingSourceId;
   final String? notes;
+  final String? paymentDestinationId;
 
   // [checkIn, checkIn+1, ..., checkOut-1] — checkOut is exclusive
   List<DateTime> get nights {

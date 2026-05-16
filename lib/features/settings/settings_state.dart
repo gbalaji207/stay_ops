@@ -24,16 +24,18 @@ class SettingsLoaded extends SettingsState {
     required this.rooms,
     required this.bookingTypes,
     required this.bookingSources,
+    required this.paymentDestinations,
   });
 
   final String propertyName;
   final List<Room> rooms;
   final List<BookingType> bookingTypes;
   final List<BookingSource> bookingSources;
+  final List<PaymentDestination> paymentDestinations;
 
   @override
   List<Object?> get props =>
-      [propertyName, rooms, bookingTypes, bookingSources];
+      [propertyName, rooms, bookingTypes, bookingSources, paymentDestinations];
 }
 
 class SettingsError extends SettingsState {

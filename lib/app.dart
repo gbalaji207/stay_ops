@@ -12,8 +12,11 @@ import 'features/config/config_cubit.dart';
 import 'features/config/config_repository.dart';
 import 'features/daily/daily_screen.dart';
 import 'features/monthly/monthly_screen.dart';
+import 'features/reports/payment_report_screen.dart';
+import 'features/reports/reports_screen.dart';
 import 'features/settings/booking_source_config_screen.dart';
 import 'features/settings/booking_type_config_screen.dart';
+import 'features/settings/payment_destination_config_screen.dart';
 import 'features/settings/room_config_screen.dart';
 import 'features/settings/settings_cubit.dart';
 import 'features/settings/settings_repository.dart';
@@ -73,6 +76,14 @@ GoRouter _buildRouter(AuthCubit authCubit) {
             builder: (_, _) => const MonthlyScreen(),
           ),
           GoRoute(
+            path: '/reports',
+            builder: (_, _) => const ReportsScreen(),
+          ),
+          GoRoute(
+            path: '/reports/payment',
+            builder: (_, _) => const PaymentReportScreen(),
+          ),
+          GoRoute(
             path: '/settings',
             builder: (_, _) => const SettingsScreen(),
             routes: [
@@ -104,6 +115,16 @@ GoRouter _buildRouter(AuthCubit authCubit) {
                     ctx.read<ConfigCubit>(),
                   ),
                   child: const BookingSourceConfigScreen(),
+                ),
+              ),
+              GoRoute(
+                path: 'payment-destinations',
+                builder: (context, _) => BlocProvider(
+                  create: (ctx) => SettingsCubit(
+                    SettingsRepository(),
+                    ctx.read<ConfigCubit>(),
+                  ),
+                  child: const PaymentDestinationConfigScreen(),
                 ),
               ),
             ],
@@ -157,6 +178,10 @@ class HomeShell extends StatelessWidget {
                 icon: Icon(Icons.calendar_month),
                 label: 'Monthly',
               ),
+              const BottomNavigationBarItem(
+                icon: Icon(Icons.bar_chart_rounded),
+                label: 'Reports',
+              ),
               if (isOwner)
                 const BottomNavigationBarItem(
                   icon: Icon(Icons.settings),
@@ -173,12 +198,14 @@ class HomeShell extends StatelessWidget {
     if (location.startsWith('/home')) return 0;
     if (location.startsWith('/daily')) return 1;
     if (location.startsWith('/monthly')) return 2;
-    if (isOwner && location.startsWith('/settings')) return 3;
+    if (location.startsWith('/reports')) return 3;
+    if (isOwner && location.startsWith('/settings')) return 4;
     return 1;
   }
 
   void _onTap(BuildContext context, int index, bool isOwner) {
-    const paths = ['/home', '/daily', '/monthly', '/settings'];
+    final paths = ['/home', '/daily', '/monthly', '/reports'];
+    if (isOwner) paths.add('/settings');
     if (index < paths.length) context.go(paths[index]);
   }
 }

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../core/constants.dart';
 import '../../core/theme/app_theme.dart';
 import '../auth/auth_cubit.dart';
 import '../config/config_cubit.dart';
@@ -40,6 +39,9 @@ class SettingsScreen extends StatelessWidget {
             final activeSources = configState is ConfigLoaded
                 ? configState.bookingSources.length
                 : 0;
+            final activeDestinations = configState is ConfigLoaded
+                ? configState.paymentDestinations.length
+                : 0;
 
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -72,6 +74,14 @@ class SettingsScreen extends StatelessWidget {
                       onTap: () => context.go('/settings/booking-sources'),
                       colors: colors,
                     ),
+                    _ConfigRow(
+                      icon: Icons.account_balance_wallet_outlined,
+                      label: 'Payment destinations',
+                      subtitle: '$activeDestinations active',
+                      onTap: () =>
+                          context.go('/settings/payment-destinations'),
+                      colors: colors,
+                    ),
                   ],
                 ),
                 const SizedBox(height: 24),
@@ -84,7 +94,7 @@ class SettingsScreen extends StatelessWidget {
                 const SizedBox(height: 32),
                 Center(
                   child: Text(
-                    'StayOps v1.1 · May 2026',
+                    'StayOps v1.3 · May 2026',
                     style: TextStyle(fontSize: 11, color: colors.textHint),
                   ),
                 ),
@@ -104,9 +114,6 @@ class _PropertyCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final uuid = AppConstants.propertyId;
-    final truncated = uuid.length > 18 ? '${uuid.substring(0, 18)}…' : uuid;
-
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(

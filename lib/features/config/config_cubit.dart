@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../shared/models/booking_source.dart';
 import '../../shared/models/booking_type.dart';
+import '../../shared/models/payment_destination.dart';
 import '../../shared/models/room.dart';
 import 'config_repository.dart';
 
@@ -20,11 +21,13 @@ class ConfigCubit extends Cubit<ConfigState> {
         _repository.fetchRooms(),
         _repository.fetchBookingTypes(),
         _repository.fetchBookingSources(),
+        _repository.fetchPaymentDestinations(),
       ]);
       emit(ConfigLoaded(
         rooms: results[0] as List<Room>,
         bookingTypes: results[1] as List<BookingType>,
         bookingSources: results[2] as List<BookingSource>,
+        paymentDestinations: results[3] as List<PaymentDestination>,
       ));
     } catch (e) {
       emit(ConfigError(e.toString()));

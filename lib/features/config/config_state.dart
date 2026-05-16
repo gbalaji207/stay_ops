@@ -23,14 +23,17 @@ class ConfigLoaded extends ConfigState {
     required this.rooms,
     required this.bookingTypes,
     required this.bookingSources,
+    required this.paymentDestinations,
   });
 
   final List<Room> rooms;
   final List<BookingType> bookingTypes;
   final List<BookingSource> bookingSources;
+  final List<PaymentDestination> paymentDestinations;
 
   @override
-  List<Object?> get props => [rooms, bookingTypes, bookingSources];
+  List<Object?> get props =>
+      [rooms, bookingTypes, bookingSources, paymentDestinations];
 }
 
 class ConfigError extends ConfigState {

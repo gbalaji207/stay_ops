@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../core/theme/app_theme.dart';
 import '../../shared/models/booking_group.dart';
 import '../../shared/models/booking_source.dart';
+import '../../shared/models/payment_destination.dart';
 import '../../shared/models/room.dart';
 import '../../shared/widgets/conflict_dialog.dart';
 import '../config/config_cubit.dart';
@@ -59,6 +60,7 @@ class _BookingFormState extends State<BookingForm> {
   late String? _typeId;
   late String? _sourceId;
   late bool _paymentReceived;
+  late String? _paymentDestinationId;
   final _amountController = TextEditingController();
   final _notesController = TextEditingController();
 
@@ -78,6 +80,7 @@ class _BookingFormState extends State<BookingForm> {
     _typeId = group?.bookingTypeId;
     _sourceId = group?.bookingSourceId;
     _paymentReceived = group?.paymentReceived ?? false;
+    _paymentDestinationId = group?.paymentDestinationId;
     _amountController.text =
         group != null && group.totalAmount > 0
             ? group.totalAmount.toInt().toString()
@@ -112,6 +115,21 @@ class _BookingFormState extends State<BookingForm> {
   List<BookingSource> _filteredSources(List<BookingSource> all) {
     if (_typeId == null) return [];
     return all.where((s) => s.bookingTypeId == _typeId).toList();
+  }
+
+  void _onSourceChanged(
+    String? sourceId,
+    List<BookingSource> sources,
+    List<PaymentDestination> destinations,
+  ) {
+    setState(() => _sourceId = sourceId);
+    if (sourceId == null) return;
+    final source = sources.where((s) => s.id == sourceId).firstOrNull;
+    final destId = source?.defaultPaymentDestinationId;
+    if (destId != null &&
+        destinations.any((d) => d.id == destId && d.isActive)) {
+      setState(() => _paymentDestinationId = destId);
+    }
   }
 
   Future<void> _pickDate(BuildContext context, bool isCheckIn) async {
@@ -152,6 +170,7 @@ class _BookingFormState extends State<BookingForm> {
       notes: _notesController.text.trim().isEmpty
           ? null
           : _notesController.text.trim(),
+      paymentDestinationId: _paymentDestinationId,
     );
     context.read<BookingCubit>().checkAndSave(input);
   }
@@ -167,6 +186,7 @@ class _BookingFormState extends State<BookingForm> {
     final rooms = configState.rooms;
     final types = configState.bookingTypes;
     final filteredSources = _filteredSources(configState.bookingSources);
+    final destinations = configState.paymentDestinations;
     final isEditMode = widget.existingGroup != null;
 
     String? roomName;
@@ -383,8 +403,11 @@ class _BookingFormState extends State<BookingForm> {
                             _SourceDropdown(
                               sources: filteredSources,
                               selectedId: _sourceId,
-                              onChanged: (id) =>
-                                  setState(() => _sourceId = id),
+                              onChanged: (id) => _onSourceChanged(
+                                id,
+                                configState.bookingSources,
+                                destinations,
+                              ),
                               colors: colors,
                             ),
                           ],
@@ -420,6 +443,18 @@ class _BookingFormState extends State<BookingForm> {
                                   setState(() => _paymentReceived = v),
                             ),
                           ]),
+                          const SizedBox(height: 16),
+                          _FieldLabel(
+                              text: 'Payment destination',
+                              colors: colors),
+                          const SizedBox(height: 6),
+                          _DestinationDropdown(
+                            destinations: destinations,
+                            selectedId: _paymentDestinationId,
+                            onChanged: (id) =>
+                                setState(() => _paymentDestinationId = id),
+                            colors: colors,
+                          ),
                           const SizedBox(height: 16),
                           _FieldLabel(
                               text: 'Notes (optional)',
@@ -656,6 +691,60 @@ class _SourceDropdown extends StatelessWidget {
                     child: Text(s.name),
                   ))
               .toList(),
+          onChanged: onChanged,
+        ),
+      ),
+    );
+  }
+}
+
+class _DestinationDropdown extends StatelessWidget {
+  const _DestinationDropdown({
+    required this.destinations,
+    required this.selectedId,
+    required this.onChanged,
+    required this.colors,
+  });
+  final List<PaymentDestination> destinations;
+  final String? selectedId;
+  final ValueChanged<String?> onChanged;
+  final AppColors colors;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: colors.background,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: colors.border),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: selectedId,
+          isExpanded: true,
+          hint: Text(
+            '— Not specified —',
+            style: TextStyle(color: colors.textHint, fontSize: 14),
+          ),
+          dropdownColor: colors.surface,
+          style: TextStyle(color: colors.textPrimary, fontSize: 14),
+          iconEnabledColor: colors.textSecondary,
+          items: [
+            DropdownMenuItem<String>(
+              value: null,
+              child: Text(
+                '— Not specified —',
+                style: TextStyle(color: colors.textHint),
+              ),
+            ),
+            ...destinations.map(
+              (d) => DropdownMenuItem<String>(
+                value: d.id,
+                child: Text(d.name),
+              ),
+            ),
+          ],
           onChanged: onChanged,
         ),
       ),

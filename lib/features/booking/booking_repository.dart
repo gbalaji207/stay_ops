@@ -50,6 +50,7 @@ class BookingRepository {
       'booking_type_id': input.bookingTypeId,
       'booking_source_id': input.bookingSourceId,
       'notes': input.notes,
+      'payment_destination_id': input.paymentDestinationId,
     }).select('id').single();
 
     final groupId = groupRow['id'] as String;
@@ -160,6 +161,7 @@ class BookingRepository {
       'booking_type_id': input.bookingTypeId,
       'booking_source_id': input.bookingSourceId,
       'notes': input.notes,
+      'payment_destination_id': input.paymentDestinationId,
       'updated_at': DateTime.now().toIso8601String(),
     }).eq('id', groupId);
 

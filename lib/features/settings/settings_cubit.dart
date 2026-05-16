@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../shared/models/booking_source.dart';
 import '../../shared/models/booking_type.dart';
+import '../../shared/models/payment_destination.dart';
 import '../../shared/models/room.dart';
 import '../config/config_cubit.dart';
 import 'settings_repository.dart';
@@ -24,12 +25,14 @@ class SettingsCubit extends Cubit<SettingsState> {
         _repository.fetchAllRooms(),
         _repository.fetchAllBookingTypes(),
         _repository.fetchAllBookingSources(),
+        _repository.fetchAllPaymentDestinations(),
       ]);
       emit(SettingsLoaded(
         propertyName: results[0] as String,
         rooms: results[1] as List<Room>,
         bookingTypes: results[2] as List<BookingType>,
         bookingSources: results[3] as List<BookingSource>,
+        paymentDestinations: results[4] as List<PaymentDestination>,
       ));
     } catch (e) {
       emit(SettingsError(e.toString()));
@@ -110,6 +113,39 @@ class SettingsCubit extends Cubit<SettingsState> {
     required bool isActive,
   }) async {
     await _repository.setBookingSourceActive(id, isActive: isActive);
+    await _reloadAfterWrite();
+  }
+
+  Future<void> updateBookingSourceDefaultDestination(
+    String sourceId,
+    String? destinationId,
+  ) async {
+    await _repository.updateBookingSourceDestination(sourceId, destinationId);
+    await _reloadAfterWrite();
+  }
+
+  // ── Payment destinations ───────────────────────────────────────────────────
+
+  Future<void> addPaymentDestination(String name) async {
+    final state = this.state;
+    if (state is! SettingsLoaded) return;
+    final nextOrder = state.paymentDestinations.isEmpty
+        ? 1
+        : state.paymentDestinations.last.sortOrder + 1;
+    await _repository.addPaymentDestination(name, nextOrder);
+    await _reloadAfterWrite();
+  }
+
+  Future<void> updatePaymentDestination(String id, String name) async {
+    await _repository.updatePaymentDestination(id, name);
+    await _reloadAfterWrite();
+  }
+
+  Future<void> setPaymentDestinationActive(
+    String id, {
+    required bool isActive,
+  }) async {
+    await _repository.setPaymentDestinationActive(id, isActive: isActive);
     await _reloadAfterWrite();
   }
 }

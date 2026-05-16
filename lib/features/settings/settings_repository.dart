@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/constants.dart';
 import '../../shared/models/booking_source.dart';
 import '../../shared/models/booking_type.dart';
+import '../../shared/models/payment_destination.dart';
 import '../../shared/models/room.dart';
 
 class SettingsRepository {
@@ -42,11 +43,22 @@ class SettingsRepository {
   Future<List<BookingSource>> fetchAllBookingSources() async {
     final response = await _client
         .from('booking_sources')
-        .select()
+        .select('*,payment_destinations(id,name)')
         .eq('property_id', AppConstants.propertyId)
         .order('sort_order', ascending: true);
     return (response as List)
         .map((e) => BookingSource.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<List<PaymentDestination>> fetchAllPaymentDestinations() async {
+    final response = await _client
+        .from('payment_destinations')
+        .select()
+        .eq('property_id', AppConstants.propertyId)
+        .order('sort_order', ascending: true);
+    return (response as List)
+        .map((e) => PaymentDestination.fromJson(e as Map<String, dynamic>))
         .toList();
   }
 
@@ -111,6 +123,42 @@ class SettingsRepository {
   }) async {
     await _client
         .from('booking_sources')
+        .update({'is_active': isActive})
+        .eq('id', id);
+  }
+
+  Future<void> updateBookingSourceDestination(
+    String sourceId,
+    String? destinationId,
+  ) async {
+    await _client
+        .from('booking_sources')
+        .update({'default_payment_destination_id': destinationId})
+        .eq('id', sourceId);
+  }
+
+  Future<void> addPaymentDestination(String name, int sortOrder) async {
+    await _client.from('payment_destinations').insert({
+      'property_id': AppConstants.propertyId,
+      'name': name,
+      'sort_order': sortOrder,
+      'is_active': true,
+    });
+  }
+
+  Future<void> updatePaymentDestination(String id, String name) async {
+    await _client
+        .from('payment_destinations')
+        .update({'name': name})
+        .eq('id', id);
+  }
+
+  Future<void> setPaymentDestinationActive(
+    String id, {
+    required bool isActive,
+  }) async {
+    await _client
+        .from('payment_destinations')
         .update({'is_active': isActive})
         .eq('id', id);
   }
