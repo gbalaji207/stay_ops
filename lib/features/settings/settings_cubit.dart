@@ -46,17 +46,17 @@ class SettingsCubit extends Cubit<SettingsState> {
 
   // ── Rooms ──────────────────────────────────────────────────────────────────
 
-  Future<void> addRoom(String name) async {
+  Future<void> addRoom(String name, {String? sfRoomId}) async {
     final state = this.state;
     if (state is! SettingsLoaded) return;
     final nextOrder =
         state.rooms.isEmpty ? 1 : state.rooms.last.sortOrder + 1;
-    await _repository.addRoom(name, nextOrder);
+    await _repository.addRoom(name, nextOrder, sfRoomId: sfRoomId);
     await _reloadAfterWrite();
   }
 
-  Future<void> updateRoom(String id, String name) async {
-    await _repository.updateRoom(id, name);
+  Future<void> updateRoom(String id, String name, {String? sfRoomId}) async {
+    await _repository.updateRoom(id, name, sfRoomId: sfRoomId);
     await _reloadAfterWrite();
   }
 

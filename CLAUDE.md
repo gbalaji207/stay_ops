@@ -1,6 +1,21 @@
-# CLAUDE.md — StayOps
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 Mobile-first hospitality income tracker. Flutter Android APK + Supabase backend. Single property per install.
+
+---
+
+## Commands
+
+```bash
+flutter pub get          # install dependencies
+flutter run              # debug on connected device/emulator
+flutter build apk        # release APK
+flutter test             # all tests
+flutter test test/widget_test.dart   # single test file
+flutter analyze          # static analysis (flutter_lints)
+```
 
 ---
 
@@ -30,9 +45,11 @@ lib/
 │   ├── booking/      # entry_screen, booking_form (shared widget), booking_cubit
 │   ├── daily/        # daily_screen, daily_cubit
 │   ├── monthly/      # monthly_screen, monthly_cubit
-│   └── settings/     # owner only — rooms, booking_types, booking_sources
+│   ├── reports/      # reports_screen, payment_report_screen, reports_cubit
+│   └── settings/     # owner only — rooms, booking_types, booking_sources, payment_destinations
 └── shared/
-    ├── models/       # room, booking_type, booking_source, booking_group, booking_day
+    ├── models/       # room, booking_type, booking_source, booking_group, booking_day,
+    │                 # payment_destination, room_payment_summary
     └── widgets/      # stat_card, conflict_dialog
 ```
 
@@ -51,6 +68,8 @@ On 4th digit entered → auto-submit (no confirm button). Wrong PIN → shake + 
 
 After `AuthAuthenticated` is emitted → immediately call `ConfigCubit.loadConfig()` for **all roles** → navigate `/daily`.
 
+The PIN screen is always rendered in dark theme regardless of system setting.
+
 ---
 
 ## Cubits
@@ -58,20 +77,23 @@ After `AuthAuthenticated` is emitted → immediately call `ConfigCubit.loadConfi
 | Cubit | Scope | Notes |
 |---|---|---|
 | `AuthCubit` | App-level | PIN, role, session |
-| `ConfigCubit` | App-level | Rooms + types + sources. Loaded once post-auth. **Must be provided at app root.** |
+| `ConfigCubit` | App-level | Rooms + types + sources + destinations. Loaded once post-auth. **Must be provided at app root.** |
 | `BookingCubit` | Feature | Save/edit/conflict check |
 | `DailyCubit` | Feature | Daily room status + fetch group by day |
 | `MonthlyCubit` | Feature | Month bookings + heatmap stats |
+| `ReportsCubit` | Feature | Payment report aggregation (client-side grouping) |
 | `SettingsCubit` | Feature | Config CRUD. After every write → call `ConfigCubit.reload()`. |
 
 Rules:
 - Cubits never call Supabase directly — always go through a repository
 - All state classes extend `Equatable` and override `props`
-- `ConfigCubit` is the single source of truth for rooms/types/sources during a session
+- `ConfigCubit` is the single source of truth for rooms/types/sources/destinations during a session
 
 ---
 
 ## Navigation
+
+Routes live in `lib/app.dart`. GoRouter uses a `_GoRouterRefreshStream` wrapping `AuthCubit.stream` to trigger redirects on auth state changes.
 
 ```dart
 // Route guard
@@ -84,7 +106,9 @@ redirect: (context, state) {
 }
 ```
 
-Settings tab is **fully absent from the widget tree** for staff — not hidden, not greyed out.
+Routes: `/pin`, `/home`, `/daily`, `/monthly`, `/reports`, `/reports/payment`, `/settings`, `/settings/rooms`, `/settings/booking-types`, `/settings/booking-sources`, `/settings/payment-destinations`.
+
+Settings tab (and Reports tab for staff) are **fully absent from the widget tree** for staff — not hidden, not greyed out. Bottom nav has 5 items for owner, 4 for staff.
 
 ---
 
@@ -144,7 +168,20 @@ WHERE booking_days.room_id = :roomId AND booking_days.booking_date = :date AND b
 PATCH /booking_groups?id=eq.<id>          -- update metadata
 PATCH /booking_days (removed nights)      -- is_active=false
 PATCH /booking_days (remaining nights)    -- recalculated amount
+
+# Reports: joins booking_days → booking_groups → payment_destinations, aggregated client-side
+GET /booking_days?property_id=eq.<id>&booking_date=gte.<start>&booking_date=lte.<end>&is_active=eq.true
+  &select=amount,room_id,rooms(name),booking_groups!inner(payment_destination_id,payment_destinations(*))
+  &booking_groups.is_active=eq.true
 ```
+
+Reports aggregation happens **client-side** in `ReportsRepository` — raw rows are grouped by room → destination into `RoomPaymentSummary` objects. Null `payment_destination_id` is displayed as "Not specified".
+
+---
+
+## Payment Destinations
+
+`payment_destinations` is a settings-managed table (owner only). Each `booking_source` can have a default `payment_destination_id`. When creating a booking, the destination is pre-filled from the source default but overridable per booking. Stored as a nullable FK on `booking_groups`.
 
 ---
 
@@ -152,7 +189,7 @@ PATCH /booking_days (remaining nights)    -- recalculated amount
 
 `ThemeMode.system` — follows OS. All widgets use semantic `ThemeData` tokens. **Never hardcode hex values in widget code.**
 
-Key tokens (defined once in `app_theme.dart`):
+Colors are accessed via `Theme.of(context).extension<AppColors>()`. Key tokens (defined once in `app_theme.dart`):
 
 | Token | Light | Dark |
 |---|---|---|
@@ -176,6 +213,7 @@ Key tokens (defined once in `app_theme.dart`):
 Single widget reused for new entry and edit. Receives `BookingGroup?` — non-null = edit mode.
 
 - Booking source dropdown: filtered by selected type chip. **Hidden entirely** if selected type has no active sources.
+- Payment destination dropdown: pre-filled from selected source's default destination; always shown.
 - Save disabled when: `amount == 0` OR `check_out <= check_in`.
 - Button label: "Save booking" (new) / "Save changes" (edit).
 - Presented as a bottom sheet (modal).
@@ -188,3 +226,4 @@ Single widget reused for new entry and edit. Receives `BookingGroup?` — non-nu
 - Inactive items (`is_active=false`): rendered at 45% opacity, still shown, restorable.
 - Booking sources screen has type-filter pills (OTA / Offline / Direct) above the list.
 - After any write: `SettingsCubit` → `ConfigCubit.reload()` — mandatory.
+- Payment destinations screen follows the same inline-expand pattern as other sub-screens.

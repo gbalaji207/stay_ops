@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 
+import 'package:go_router/go_router.dart';
+
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/models/booking_group.dart';
 import '../../booking/booking_form.dart';
@@ -156,9 +158,21 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: _buildHeader(colors),
               ),
 
-              // Section 1 — Check-outs
+              // Section 1 — Occupancy
               _buildSectionHeader(
-                context: context,
+                colors: colors,
+                label: 'Occupancy today',
+                color: colors.textPrimary,
+              ),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: OccupancyStrip(snapshot: state.occupancy),
+                ),
+              ),
+
+              // Section 2 — Check-outs
+              _buildSectionHeader(
                 colors: colors,
                 label: 'Check-outs today',
                 color: colors.danger,
@@ -173,9 +187,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 emptyText: 'No check-outs today',
               ),
 
-              // Section 2 — Check-ins
+              // Section 3 — Check-ins
               _buildSectionHeader(
-                context: context,
                 colors: colors,
                 label: 'Check-ins today',
                 color: colors.success,
@@ -190,23 +203,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 emptyText: 'No check-ins today',
               ),
 
-              // Section 3 — Occupancy
-              _buildSectionHeader(
-                context: context,
-                colors: colors,
-                label: 'Occupancy today',
-                color: colors.textPrimary,
-              ),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                  child: OccupancyStrip(snapshot: state.occupancy),
-                ),
-              ),
-
               // Section 4 — Upcoming
               _buildSectionHeader(
-                context: context,
                 colors: colors,
                 label: 'Upcoming check-ins',
                 color: colors.textPrimary,
@@ -237,7 +235,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
               // Section 5 — New today
               _buildSectionHeader(
-                context: context,
                 colors: colors,
                 label: 'New today',
                 color: colors.textPrimary,
@@ -270,7 +267,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
               // Section 6 — Payment pending
               _buildSectionHeader(
-                context: context,
                 colors: colors,
                 label: 'Payment pending',
                 color: colors.warning,
@@ -350,23 +346,57 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  SliverPersistentHeader _buildSectionHeader({
-    required BuildContext context,
+  SliverToBoxAdapter _buildSectionHeader({
     required AppColors colors,
     required String label,
     required Color color,
     int? count,
     String? subtitle,
   }) {
-    return SliverPersistentHeader(
-      pinned: true,
-      delegate: _StickyHeaderDelegate(
-        label: label,
-        color: color,
-        count: count,
-        subtitle: subtitle,
-        backgroundColor: colors.background,
-        textSecondary: colors.textSecondary,
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
+        child: Row(
+          children: [
+            Text(
+              label.toUpperCase(),
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: color,
+                letterSpacing: 0.5,
+              ),
+            ),
+            if (count != null) ...[
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '$count',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: color,
+                  ),
+                ),
+              ),
+            ],
+            if (subtitle != null) ...[
+              const Spacer(),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: colors.textSecondary,
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -423,8 +453,8 @@ class _HomeScreenState extends State<HomeScreen> {
       foregroundColor: Colors.white,
       elevation: 4,
       onPressed: () async {
-        final saved = await showBookingFormSheet(context);
-        if (saved && context.mounted) {
+        final saved = await context.push<bool>('/booking/new');
+        if ((saved ?? false) && context.mounted) {
           cubit.refresh(_today, _totalRooms());
         }
       },
@@ -433,90 +463,3 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// ── Sticky section header delegate ──────────────────────────────────────────
-
-class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
-  _StickyHeaderDelegate({
-    required this.label,
-    required this.color,
-    required this.backgroundColor,
-    required this.textSecondary,
-    this.count,
-    this.subtitle,
-  });
-
-  final String label;
-  final Color color;
-  final Color backgroundColor;
-  final Color textSecondary;
-  final int? count;
-  final String? subtitle;
-
-  @override
-  double get minExtent => 36;
-  @override
-  double get maxExtent => 36;
-
-  @override
-  Widget build(
-    BuildContext context,
-    double shrinkOffset,
-    bool overlapsContent,
-  ) {
-    return Container(
-      color: backgroundColor,
-      alignment: Alignment.centerLeft,
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-      child: Row(
-        children: [
-          Text(
-            label.toUpperCase(),
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: color,
-              letterSpacing: 0.5,
-            ),
-          ),
-          if (count != null) ...[
-            const SizedBox(width: 6),
-            Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text(
-                '$count',
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  color: color,
-                ),
-              ),
-            ),
-          ],
-          if (subtitle != null) ...[
-            const Spacer(),
-            Text(
-              subtitle!,
-              style: TextStyle(
-                fontSize: 11,
-                color: textSecondary,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  @override
-  bool shouldRebuild(_StickyHeaderDelegate old) =>
-      old.label != label ||
-      old.color != color ||
-      old.count != count ||
-      old.subtitle != subtitle ||
-      old.backgroundColor != backgroundColor;
-}

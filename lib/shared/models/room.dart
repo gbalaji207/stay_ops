@@ -7,6 +7,7 @@ class Room extends Equatable {
     required this.name,
     required this.sortOrder,
     required this.isActive,
+    this.sfRoomId,
   });
 
   final String id;
@@ -14,6 +15,7 @@ class Room extends Equatable {
   final String name;
   final int sortOrder;
   final bool isActive;
+  final String? sfRoomId;
 
   factory Room.fromJson(Map<String, dynamic> json) {
     return Room(
@@ -22,9 +24,10 @@ class Room extends Equatable {
       name: json['name'] as String,
       sortOrder: json['sort_order'] as int,
       isActive: json['is_active'] as bool,
+      sfRoomId: json['sf_room_id'] as String?,
     );
   }
 
   @override
-  List<Object?> get props => [id, propertyId, name, sortOrder, isActive];
+  List<Object?> get props => [id, propertyId, name, sortOrder, isActive, sfRoomId];
 }

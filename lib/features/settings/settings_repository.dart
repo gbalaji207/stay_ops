@@ -62,17 +62,21 @@ class SettingsRepository {
         .toList();
   }
 
-  Future<void> addRoom(String name, int sortOrder) async {
+  Future<void> addRoom(String name, int sortOrder, {String? sfRoomId}) async {
     await _client.from('rooms').insert({
       'property_id': AppConstants.propertyId,
       'name': name,
       'sort_order': sortOrder,
       'is_active': true,
+      'sf_room_id': sfRoomId,
     });
   }
 
-  Future<void> updateRoom(String id, String name) async {
-    await _client.from('rooms').update({'name': name}).eq('id', id);
+  Future<void> updateRoom(String id, String name, {String? sfRoomId}) async {
+    await _client
+        .from('rooms')
+        .update({'name': name, 'sf_room_id': sfRoomId})
+        .eq('id', id);
   }
 
   Future<void> setRoomActive(String id, {required bool isActive}) async {

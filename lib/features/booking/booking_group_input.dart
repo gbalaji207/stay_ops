@@ -6,6 +6,7 @@ class BookingGroupInput {
     required this.checkOut,
     required this.totalAmount,
     required this.paymentReceived,
+    this.bookingDate,
     this.bookingTypeId,
     this.bookingSourceId,
     this.notes,
@@ -19,6 +20,7 @@ class BookingGroupInput {
   final DateTime checkOut;
   final double totalAmount;
   final bool paymentReceived;
+  final DateTime? bookingDate;
   final String? bookingTypeId;
   final String? bookingSourceId;
   final String? notes;

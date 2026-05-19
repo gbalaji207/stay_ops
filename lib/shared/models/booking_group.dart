@@ -9,6 +9,7 @@ class BookingGroup extends Equatable {
     required this.checkOut,
     required this.totalAmount,
     required this.paymentReceived,
+    this.bookingDate,
     this.bookingTypeId,
     this.bookingSourceId,
     this.notes,
@@ -24,6 +25,7 @@ class BookingGroup extends Equatable {
   final DateTime checkOut;
   final double totalAmount;
   final bool paymentReceived;
+  final DateTime? bookingDate;
   final String? bookingTypeId;
   final String? bookingSourceId;
   final String? notes;
@@ -44,6 +46,9 @@ class BookingGroup extends Equatable {
       checkOut: DateTime.parse(json['check_out'] as String),
       totalAmount: (json['total_amount'] as num).toDouble(),
       paymentReceived: json['payment_received'] as bool,
+      bookingDate: json['booking_date'] != null
+          ? DateTime.parse(json['booking_date'] as String)
+          : null,
       bookingTypeId: json['booking_type_id'] as String?,
       bookingSourceId: json['booking_source_id'] as String?,
       notes: json['notes'] as String?,
@@ -62,6 +67,7 @@ class BookingGroup extends Equatable {
         checkOut,
         totalAmount,
         paymentReceived,
+        bookingDate,
         bookingTypeId,
         bookingSourceId,
         notes,

@@ -4,7 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../core/theme/app_theme.dart';
 import '../../shared/models/room.dart';
 import 'settings_cubit.dart';
-import 'settings_widgets.dart';
+import 'settings_widgets.dart' show SettingsErrorView;
 
 class RoomConfigScreen extends StatefulWidget {
   const RoomConfigScreen({super.key});
@@ -16,7 +16,9 @@ class RoomConfigScreen extends StatefulWidget {
 class _RoomConfigScreenState extends State<RoomConfigScreen> {
   String? _editingId;
   final _editController = TextEditingController();
+  final _editSfRoomIdController = TextEditingController();
   final _addController = TextEditingController();
+  final _addSfRoomIdController = TextEditingController();
   bool _saving = false;
 
   @override
@@ -28,7 +30,9 @@ class _RoomConfigScreenState extends State<RoomConfigScreen> {
   @override
   void dispose() {
     _editController.dispose();
+    _editSfRoomIdController.dispose();
     _addController.dispose();
+    _addSfRoomIdController.dispose();
     super.dispose();
   }
 
@@ -36,6 +40,7 @@ class _RoomConfigScreenState extends State<RoomConfigScreen> {
     setState(() {
       _editingId = room.id;
       _editController.text = room.name;
+      _editSfRoomIdController.text = room.sfRoomId ?? '';
     });
   }
 
@@ -43,17 +48,23 @@ class _RoomConfigScreenState extends State<RoomConfigScreen> {
     setState(() {
       _editingId = null;
       _editController.clear();
+      _editSfRoomIdController.clear();
     });
   }
 
   Future<void> _saveEdit(Room room) async {
     final name = _editController.text.trim();
-    if (name.isEmpty || name == room.name) {
+    final sfRoomId = _editSfRoomIdController.text.trim().isEmpty
+        ? null
+        : _editSfRoomIdController.text.trim();
+    if (name.isEmpty || (name == room.name && sfRoomId == room.sfRoomId)) {
       _cancelEdit();
       return;
     }
     setState(() => _saving = true);
-    await context.read<SettingsCubit>().updateRoom(room.id, name);
+    await context
+        .read<SettingsCubit>()
+        .updateRoom(room.id, name, sfRoomId: sfRoomId);
     if (mounted) setState(() { _saving = false; _editingId = null; });
   }
 
@@ -68,10 +79,14 @@ class _RoomConfigScreenState extends State<RoomConfigScreen> {
   Future<void> _addRoom() async {
     final name = _addController.text.trim();
     if (name.isEmpty) return;
+    final sfRoomId = _addSfRoomIdController.text.trim().isEmpty
+        ? null
+        : _addSfRoomIdController.text.trim();
     setState(() => _saving = true);
-    await context.read<SettingsCubit>().addRoom(name);
+    await context.read<SettingsCubit>().addRoom(name, sfRoomId: sfRoomId);
     if (mounted) {
       _addController.clear();
+      _addSfRoomIdController.clear();
       setState(() => _saving = false);
     }
   }
@@ -139,6 +154,7 @@ class _RoomConfigScreenState extends State<RoomConfigScreen> {
                     isEditing: _editingId == rooms[i].id,
                     isSaving: _saving,
                     editController: _editController,
+                    editSfRoomIdController: _editSfRoomIdController,
                     colors: colors,
                     onEditTap: () => _startEdit(rooms[i]),
                     onSave: () => _saveEdit(rooms[i]),
@@ -152,11 +168,11 @@ class _RoomConfigScreenState extends State<RoomConfigScreen> {
             ),
           ),
           const SizedBox(height: 12),
-          SettingsAddRow(
-            controller: _addController,
+          _AddRoomRow(
+            nameController: _addController,
+            sfRoomIdController: _addSfRoomIdController,
             isSaving: _saving,
             colors: colors,
-            hint: 'Add new room…',
             onAdd: _addRoom,
           ),
         ],
@@ -171,6 +187,7 @@ class _RoomRow extends StatelessWidget {
     required this.isEditing,
     required this.isSaving,
     required this.editController,
+    required this.editSfRoomIdController,
     required this.colors,
     required this.onEditTap,
     required this.onSave,
@@ -182,6 +199,7 @@ class _RoomRow extends StatelessWidget {
   final bool isEditing;
   final bool isSaving;
   final TextEditingController editController;
+  final TextEditingController editSfRoomIdController;
   final AppColors colors;
   final VoidCallback onEditTap;
   final VoidCallback onSave;
@@ -220,7 +238,10 @@ class _RoomRow extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        'Sort: ${room.sortOrder}',
+                        [
+                          'Sort: ${room.sortOrder}',
+                          if (room.sfRoomId != null) 'SF: ${room.sfRoomId}',
+                        ].join('  ·  '),
                         style: TextStyle(
                           fontSize: 11,
                           color: colors.textSecondary,
@@ -262,6 +283,29 @@ class _RoomRow extends StatelessWidget {
                           TextStyle(fontSize: 14, color: colors.textPrimary),
                       decoration: InputDecoration(
                         isDense: true,
+                        hintText: 'Room name',
+                        hintStyle: TextStyle(fontSize: 14, color: colors.textHint),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 8,
+                        ),
+                        filled: true,
+                        fillColor: colors.surface,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(6),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: editSfRoomIdController,
+                      style:
+                          TextStyle(fontSize: 14, color: colors.textPrimary),
+                      decoration: InputDecoration(
+                        isDense: true,
+                        hintText: 'SF Room ID (optional)',
+                        hintStyle: TextStyle(fontSize: 14, color: colors.textHint),
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 10,
                           vertical: 8,
@@ -316,3 +360,74 @@ class _RoomRow extends StatelessWidget {
   }
 }
 
+class _AddRoomRow extends StatelessWidget {
+  const _AddRoomRow({
+    required this.nameController,
+    required this.sfRoomIdController,
+    required this.isSaving,
+    required this.colors,
+    required this.onAdd,
+  });
+
+  final TextEditingController nameController;
+  final TextEditingController sfRoomIdController;
+  final bool isSaving;
+  final AppColors colors;
+  final VoidCallback onAdd;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: colors.accent.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: Icon(Icons.add, size: 18, color: colors.accent),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TextField(
+                  controller: nameController,
+                  style: TextStyle(fontSize: 14, color: colors.textPrimary),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    hintText: 'Add new room…',
+                    hintStyle: TextStyle(fontSize: 14, color: colors.textHint),
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                  ),
+                  onSubmitted: (_) => onAdd(),
+                ),
+                TextField(
+                  controller: sfRoomIdController,
+                  style: TextStyle(fontSize: 13, color: colors.textPrimary),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    hintText: 'SF Room ID (optional)',
+                    hintStyle: TextStyle(fontSize: 13, color: colors.textHint),
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 6),
+                  ),
+                  onSubmitted: (_) => onAdd(),
+                ),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: isSaving ? null : onAdd,
+            child: Text('Add', style: TextStyle(color: colors.accent)),
+          ),
+        ],
+      ),
+    );
+  }
+}
