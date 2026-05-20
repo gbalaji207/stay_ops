@@ -2,50 +2,87 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../../shared/models/booking_source.dart';
+import '../../../shared/models/booking_type.dart';
 
-class WizardStep2Dates extends StatelessWidget {
-  const WizardStep2Dates({
+class WizardStep2Details extends StatelessWidget {
+  const WizardStep2Details({
     super.key,
     required this.bookingDate,
     required this.checkIn,
     required this.checkOut,
-    required this.amountController,
+    required this.types,
+    required this.allSources,
+    required this.selectedTypeId,
+    required this.selectedSourceId,
+    required this.customerNameController,
+    required this.stayFlexiBookingIdController,
+    required this.otaBookingIdController,
     required this.onBookingDateChanged,
     required this.onStayRangeChanged,
+    required this.onTypeSelected,
+    required this.onSourceChanged,
     required this.onNext,
   });
 
   final DateTime bookingDate;
   final DateTime checkIn;
   final DateTime checkOut;
-  final TextEditingController amountController;
+  final List<BookingType> types;
+  final List<BookingSource> allSources;
+  final String? selectedTypeId;
+  final String? selectedSourceId;
+  final TextEditingController customerNameController;
+  final TextEditingController stayFlexiBookingIdController;
+  final TextEditingController otaBookingIdController;
   final ValueChanged<DateTime> onBookingDateChanged;
   final void Function(DateTime checkIn, DateTime checkOut) onStayRangeChanged;
+  final ValueChanged<String?> onTypeSelected;
+  final ValueChanged<String?> onSourceChanged;
   final VoidCallback onNext;
 
-  static final _amountFmt = NumberFormat('#,##0.##');
-
   int get _nightCount => checkOut.difference(checkIn).inDays;
-  double get _totalAmount =>
-      double.tryParse(amountController.text.replaceAll(',', '')) ?? 0;
-  double get _perNight => _nightCount > 0 ? _totalAmount / _nightCount : 0;
-  bool get _canNext => _totalAmount > 0 && _nightCount > 0;
+  bool get _canNext => _nightCount > 0;
+
+  List<BookingSource> get _filteredSources {
+    if (selectedTypeId == null) return [];
+    return allSources
+        .where((s) => s.bookingTypeId == selectedTypeId && s.isActive)
+        .toList();
+  }
 
   DateTime _today() {
     final now = DateTime.now();
     return DateTime(now.year, now.month, now.day);
   }
 
-  Future<void> _pickBookingDate(BuildContext context) async {
+  Future<void> _pickBookingDateTime(BuildContext context) async {
     final today = _today();
-    final picked = await showDatePicker(
+    final pickedDate = await showDatePicker(
       context: context,
-      initialDate: bookingDate,
+      initialDate:
+          DateTime(bookingDate.year, bookingDate.month, bookingDate.day),
       firstDate: today.subtract(const Duration(days: 365)),
       lastDate: today.add(const Duration(days: 30)),
     );
-    if (picked == null || !context.mounted) return;
-    onBookingDateChanged(picked);
+    if (pickedDate == null || !context.mounted) return;
+
+    final pickedTime = await showTimePicker(
+      context: context,
+      initialTime:
+          TimeOfDay(hour: bookingDate.hour, minute: bookingDate.minute),
+    );
+    if (!context.mounted) return;
+
+    final t = pickedTime ??
+        TimeOfDay(hour: bookingDate.hour, minute: bookingDate.minute);
+    onBookingDateChanged(DateTime(
+      pickedDate.year,
+      pickedDate.month,
+      pickedDate.day,
+      t.hour,
+      t.minute,
+    ));
   }
 
   Future<void> _pickStayRange(BuildContext context) async {
@@ -64,6 +101,8 @@ class WizardStep2Dates extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).extension<AppColors>()!;
     final dateFmt = DateFormat('d MMM');
+    final dtFmt = DateFormat('d MMM yyyy, HH:mm');
+    final filteredSources = _filteredSources;
 
     return SingleChildScrollView(
       padding: EdgeInsets.fromLTRB(
@@ -75,11 +114,12 @@ class WizardStep2Dates extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _FieldLabel(text: 'Booking date', colors: colors),
+          _FieldLabel(text: 'Booking date & time', colors: colors),
           const SizedBox(height: 6),
           _DateTile(
-            label: dateFmt.format(bookingDate),
-            onTap: () => _pickBookingDate(context),
+            label: dtFmt.format(bookingDate),
+            icon: Icons.schedule_outlined,
+            onTap: () => _pickBookingDateTime(context),
             colors: colors,
           ),
           const SizedBox(height: 20),
@@ -94,46 +134,67 @@ class WizardStep2Dates extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
               color: colors.accentSubtle,
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Row(children: [
-              Text(
-                '$_nightCount night${_nightCount == 1 ? '' : 's'}',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: colors.accent,
-                ),
+            child: Text(
+              '$_nightCount night${_nightCount == 1 ? '' : 's'}',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: colors.accent,
               ),
-              const Spacer(),
-              Text(
-                _nightCount > 0 && _totalAmount > 0
-                    ? '₹${_amountFmt.format(_perNight)} / night'
-                    : '—',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: colors.accent,
-                ),
-              ),
-            ]),
+            ),
           ),
           const SizedBox(height: 20),
-          _FieldLabel(text: 'Total amount (₹)', colors: colors),
+          _FieldLabel(text: 'Booking type', colors: colors),
+          const SizedBox(height: 6),
+          _TypeDropdown(
+            types: types,
+            selectedId: selectedTypeId,
+            onChanged: onTypeSelected,
+            colors: colors,
+          ),
+          const SizedBox(height: 20),
+          _FieldLabel(text: 'Booking source', colors: colors),
+          const SizedBox(height: 6),
+          _SourceDropdown(
+            sources: filteredSources,
+            selectedId: selectedSourceId,
+            selectedTypeId: selectedTypeId,
+            onChanged: filteredSources.isEmpty ? null : onSourceChanged,
+            colors: colors,
+          ),
+          const SizedBox(height: 20),
+          _FieldLabel(text: 'Customer name (optional)', colors: colors),
           const SizedBox(height: 6),
           TextField(
-            controller: amountController,
-            keyboardType:
-                const TextInputType.numberWithOptions(decimal: true),
-            style: TextStyle(color: colors.textPrimary, fontSize: 15),
-            decoration: _inputDecoration(
-              colors: colors,
-              hint: '0',
-              prefix: '₹ ',
-            ),
+            controller: customerNameController,
+            textCapitalization: TextCapitalization.words,
+            style: TextStyle(color: colors.textPrimary, fontSize: 14),
+            decoration:
+                _inputDecoration(colors: colors, hint: 'e.g. John Smith'),
+          ),
+          const SizedBox(height: 20),
+          _FieldLabel(
+              text: 'Stay Flexi booking ID (optional)', colors: colors),
+          const SizedBox(height: 6),
+          TextField(
+            controller: stayFlexiBookingIdController,
+            style: TextStyle(color: colors.textPrimary, fontSize: 14),
+            decoration: _inputDecoration(colors: colors, hint: 'e.g. SF-123456'),
+          ),
+          const SizedBox(height: 20),
+          _FieldLabel(text: 'OTA booking ID (optional)', colors: colors),
+          const SizedBox(height: 6),
+          TextField(
+            controller: otaBookingIdController,
+            style: TextStyle(color: colors.textPrimary, fontSize: 14),
+            decoration:
+                _inputDecoration(colors: colors, hint: 'e.g. MMT-987654'),
           ),
           const SizedBox(height: 32),
           SizedBox(
@@ -207,10 +268,12 @@ class _FieldLabel extends StatelessWidget {
 class _DateTile extends StatelessWidget {
   const _DateTile({
     required this.label,
+    required this.icon,
     required this.onTap,
     required this.colors,
   });
   final String label;
+  final IconData icon;
   final VoidCallback onTap;
   final AppColors colors;
 
@@ -226,8 +289,7 @@ class _DateTile extends StatelessWidget {
           border: Border.all(color: colors.border),
         ),
         child: Row(children: [
-          Icon(Icons.calendar_today_outlined,
-              size: 15, color: colors.textSecondary),
+          Icon(icon, size: 15, color: colors.textSecondary),
           const SizedBox(width: 8),
           Text(
             label,
@@ -291,6 +353,107 @@ class _DateRangeTile extends StatelessWidget {
                 color: colors.textPrimary),
           ),
         ]),
+      ),
+    );
+  }
+}
+
+class _TypeDropdown extends StatelessWidget {
+  const _TypeDropdown({
+    required this.types,
+    required this.selectedId,
+    required this.onChanged,
+    required this.colors,
+  });
+  final List<BookingType> types;
+  final String? selectedId;
+  final ValueChanged<String?> onChanged;
+  final AppColors colors;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: colors.background,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: colors.border),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: selectedId,
+          isExpanded: true,
+          hint: Text('Select type',
+              style: TextStyle(color: colors.textHint, fontSize: 14)),
+          dropdownColor: colors.surface,
+          style: TextStyle(color: colors.textPrimary, fontSize: 14),
+          iconEnabledColor: colors.textSecondary,
+          items: [
+            DropdownMenuItem<String>(
+              value: null,
+              child: Text('— Not specified —',
+                  style: TextStyle(color: colors.textHint)),
+            ),
+            ...types.map((t) =>
+                DropdownMenuItem<String>(value: t.id, child: Text(t.name))),
+          ],
+          onChanged: onChanged,
+        ),
+      ),
+    );
+  }
+}
+
+class _SourceDropdown extends StatelessWidget {
+  const _SourceDropdown({
+    required this.sources,
+    required this.selectedId,
+    required this.selectedTypeId,
+    required this.onChanged,
+    required this.colors,
+  });
+  final List<BookingSource> sources;
+  final String? selectedId;
+  final String? selectedTypeId;
+  final ValueChanged<String?>? onChanged;
+  final AppColors colors;
+
+  @override
+  Widget build(BuildContext context) {
+    final isEnabled = onChanged != null && sources.isNotEmpty;
+    final validId = sources.any((s) => s.id == selectedId) ? selectedId : null;
+
+    String disabledText = selectedTypeId == null
+        ? '— Select booking type first —'
+        : '— No sources available —';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: isEnabled ? colors.background : colors.background,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: isEnabled ? colors.border : colors.border),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: isEnabled ? validId : null,
+          isExpanded: true,
+          hint: Text('Select source',
+              style: TextStyle(color: colors.textHint, fontSize: 14)),
+          disabledHint: Text(disabledText,
+              style: TextStyle(color: colors.textHint, fontSize: 14)),
+          dropdownColor: colors.surface,
+          style: TextStyle(color: colors.textPrimary, fontSize: 14),
+          iconEnabledColor: colors.textSecondary,
+          iconDisabledColor: colors.textHint,
+          items: isEnabled
+              ? sources
+                  .map((s) =>
+                      DropdownMenuItem(value: s.id, child: Text(s.name)))
+                  .toList()
+              : null,
+          onChanged: isEnabled ? onChanged : null,
+        ),
       ),
     );
   }

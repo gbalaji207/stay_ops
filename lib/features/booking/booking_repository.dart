@@ -47,11 +47,17 @@ class BookingRepository {
       'check_out': _fmt(input.checkOut),
       'total_amount': input.totalAmount,
       'payment_received': input.paymentReceived,
-      'booking_date': input.bookingDate != null ? _fmt(input.bookingDate!) : null,
+      'booking_date': input.bookingDate?.toIso8601String(),
       'booking_type_id': input.bookingTypeId,
       'booking_source_id': input.bookingSourceId,
       'notes': input.notes,
       'payment_destination_id': input.paymentDestinationId,
+      'customer_name': input.customerName,
+      'stay_flexi_booking_id': input.stayFlexiBookingId,
+      'ota_booking_id': input.otaBookingId,
+      'tax_amount': input.taxAmount,
+      'commission_incl_tax': input.commissionInclTax,
+      'tax_deduction': input.taxDeduction,
     }).select('id').single();
 
     final groupId = groupRow['id'] as String;
@@ -159,11 +165,17 @@ class BookingRepository {
       'check_out': _fmt(input.checkOut),
       'total_amount': input.totalAmount,
       'payment_received': input.paymentReceived,
-      'booking_date': input.bookingDate != null ? _fmt(input.bookingDate!) : null,
+      'booking_date': input.bookingDate?.toIso8601String(),
       'booking_type_id': input.bookingTypeId,
       'booking_source_id': input.bookingSourceId,
       'notes': input.notes,
       'payment_destination_id': input.paymentDestinationId,
+      'customer_name': input.customerName,
+      'stay_flexi_booking_id': input.stayFlexiBookingId,
+      'ota_booking_id': input.otaBookingId,
+      'tax_amount': input.taxAmount,
+      'commission_incl_tax': input.commissionInclTax,
+      'tax_deduction': input.taxDeduction,
       'updated_at': DateTime.now().toIso8601String(),
     }).eq('id', groupId);
 

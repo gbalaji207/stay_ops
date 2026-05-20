@@ -16,6 +16,12 @@ class BookingGroup extends Equatable {
     required this.isActive,
     this.paymentDestinationId,
     this.paymentDestinationName,
+    this.customerName,
+    this.stayFlexiBookingId,
+    this.otaBookingId,
+    this.taxAmount,
+    this.commissionInclTax,
+    this.taxDeduction,
   });
 
   final String id;
@@ -32,6 +38,12 @@ class BookingGroup extends Equatable {
   final bool isActive;
   final String? paymentDestinationId;
   final String? paymentDestinationName;
+  final String? customerName;
+  final String? stayFlexiBookingId;
+  final String? otaBookingId;
+  final double? taxAmount;
+  final double? commissionInclTax;
+  final double? taxDeduction;
 
   int get nights => checkOut.difference(checkIn).inDays;
   double get perNightAmount => nights > 0 ? totalAmount / nights : 0;
@@ -55,6 +67,12 @@ class BookingGroup extends Equatable {
       isActive: json['is_active'] as bool,
       paymentDestinationId: json['payment_destination_id'] as String?,
       paymentDestinationName: destMap?['name'] as String?,
+      customerName: json['customer_name'] as String?,
+      stayFlexiBookingId: json['stay_flexi_booking_id'] as String?,
+      otaBookingId: json['ota_booking_id'] as String?,
+      taxAmount: (json['tax_amount'] as num?)?.toDouble(),
+      commissionInclTax: (json['commission_incl_tax'] as num?)?.toDouble(),
+      taxDeduction: (json['tax_deduction'] as num?)?.toDouble(),
     );
   }
 
@@ -74,5 +92,11 @@ class BookingGroup extends Equatable {
         isActive,
         paymentDestinationId,
         paymentDestinationName,
+        customerName,
+        stayFlexiBookingId,
+        otaBookingId,
+        taxAmount,
+        commissionInclTax,
+        taxDeduction,
       ];
 }

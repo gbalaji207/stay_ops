@@ -11,6 +11,12 @@ class BookingGroupInput {
     this.bookingSourceId,
     this.notes,
     this.paymentDestinationId,
+    this.customerName,
+    this.stayFlexiBookingId,
+    this.otaBookingId,
+    this.taxAmount,
+    this.commissionInclTax,
+    this.taxDeduction,
   });
 
   // null = new booking, non-null = editing existing group
@@ -18,13 +24,19 @@ class BookingGroupInput {
   final String roomId;
   final DateTime checkIn;
   final DateTime checkOut;
-  final double totalAmount;
+  final double totalAmount; // gross amount
   final bool paymentReceived;
-  final DateTime? bookingDate;
+  final DateTime? bookingDate; // includes time
   final String? bookingTypeId;
   final String? bookingSourceId;
   final String? notes;
   final String? paymentDestinationId;
+  final String? customerName;
+  final String? stayFlexiBookingId;
+  final String? otaBookingId;
+  final double? taxAmount;
+  final double? commissionInclTax;
+  final double? taxDeduction;
 
   // [checkIn, checkIn+1, ..., checkOut-1] — checkOut is exclusive
   List<DateTime> get nights {
@@ -39,6 +51,7 @@ class BookingGroupInput {
   }
 
   int get nightCount => checkOut.difference(checkIn).inDays;
-
   double get perNightAmount => nightCount > 0 ? totalAmount / nightCount : 0;
+  double get netAmount =>
+      totalAmount - (commissionInclTax ?? 0) - (taxDeduction ?? 0);
 }

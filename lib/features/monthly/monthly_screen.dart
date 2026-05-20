@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../shared/models/booking_group.dart';
 import '../../shared/models/room.dart';
-import '../booking/booking_form.dart';
+import '../booking/wizard/booking_wizard_extras.dart';
 import '../config/config_cubit.dart';
 import 'day_stats.dart';
 import 'monthly_cubit.dart';
@@ -89,8 +90,11 @@ class _MonthlyScreenState extends State<MonthlyScreen> {
   ) async {
     final cubit = context.read<MonthlyCubit>();
     final rooms = _rooms(context);
-    final saved = await showBookingFormSheet(context, existingGroup: group);
-    if (saved && mounted) cubit.load(_currentYear, _currentMonth, rooms);
+    final saved = await context.push<bool>(
+      '/booking/new',
+      extra: BookingWizardExtras(existingGroup: group),
+    );
+    if ((saved ?? false) && mounted) cubit.load(_currentYear, _currentMonth, rooms);
   }
 
   Widget _buildBody(BuildContext context, MonthlyState state) {

@@ -1,106 +1,204 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_theme.dart';
-import '../../../shared/models/booking_source.dart';
-import '../../../shared/models/booking_type.dart';
 
-class WizardStep3TypeSource extends StatelessWidget {
-  const WizardStep3TypeSource({
+class WizardStep3Payment extends StatelessWidget {
+  const WizardStep3Payment({
     super.key,
-    required this.types,
-    required this.allSources,
-    required this.selectedTypeId,
-    required this.selectedSourceId,
-    required this.onTypeSelected,
-    required this.onSourceChanged,
-    required this.onSave,
-    required this.isBusy,
+    required this.checkIn,
+    required this.checkOut,
+    required this.grossAmountController,
+    required this.taxAmountController,
+    required this.commissionController,
+    required this.tdsTcsController,
+    required this.onNext,
   });
 
-  final List<BookingType> types;
-  final List<BookingSource> allSources;
-  final String? selectedTypeId;
-  final String? selectedSourceId;
-  final ValueChanged<String> onTypeSelected;
-  final ValueChanged<String?> onSourceChanged;
-  final VoidCallback onSave;
-  final bool isBusy;
+  final DateTime checkIn;
+  final DateTime checkOut;
+  final TextEditingController grossAmountController;
+  final TextEditingController taxAmountController;
+  final TextEditingController commissionController;
+  final TextEditingController tdsTcsController;
+  final VoidCallback onNext;
 
-  List<BookingSource> get _filteredSources {
-    if (selectedTypeId == null) return [];
-    return allSources
-        .where((s) => s.bookingTypeId == selectedTypeId && s.isActive)
-        .toList();
-  }
+  static final _amountFmt = NumberFormat('#,##0.##');
 
-  bool get _canSave {
-    final filtered = _filteredSources;
-    if (filtered.isNotEmpty && selectedSourceId == null) return false;
-    return true;
-  }
+  int get _nightCount => checkOut.difference(checkIn).inDays;
+  double get _grossAmount =>
+      double.tryParse(grossAmountController.text.replaceAll(',', '')) ?? 0;
+  double get _perNight => _nightCount > 0 ? _grossAmount / _nightCount : 0;
+  double get _commissionAmount =>
+      double.tryParse(commissionController.text.replaceAll(',', '')) ?? 0;
+  double get _tdsTcsAmount =>
+      double.tryParse(tdsTcsController.text.replaceAll(',', '')) ?? 0;
+  double get _netAmount => _grossAmount - _commissionAmount - _tdsTcsAmount;
+  bool get _canNext => _grossAmount > 0;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).extension<AppColors>()!;
-    final filteredSources = _filteredSources;
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+      padding: EdgeInsets.fromLTRB(
+        20,
+        8,
+        20,
+        MediaQuery.of(context).viewInsets.bottom + 20,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _FieldLabel(text: 'Booking type', colors: colors),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: types.map((type) {
-              final selected = selectedTypeId == type.id;
-              return _TypeChip(
-                label: type.name,
-                selected: selected,
-                onTap: () => onTypeSelected(type.id),
-                colors: colors,
-              );
-            }).toList(),
+          _FieldLabel(text: 'Gross amount (₹)', colors: colors),
+          const SizedBox(height: 6),
+          TextField(
+            controller: grossAmountController,
+            keyboardType:
+                const TextInputType.numberWithOptions(decimal: true),
+            style: TextStyle(color: colors.textPrimary, fontSize: 15),
+            decoration: _inputDecoration(
+                colors: colors, hint: '0', prefix: '₹ '),
           ),
-          if (filteredSources.isNotEmpty) ...[
-            const SizedBox(height: 20),
-            _FieldLabel(text: 'Booking source', colors: colors),
-            const SizedBox(height: 6),
-            _SourceDropdown(
-              sources: filteredSources,
-              selectedId: selectedSourceId,
-              onChanged: onSourceChanged,
-              colors: colors,
+          if (_grossAmount > 0 && _nightCount > 0) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: colors.accentSubtle,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(children: [
+                Text(
+                  '$_nightCount night${_nightCount == 1 ? '' : 's'}',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: colors.accent,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  '₹${_amountFmt.format(_perNight)} / night',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: colors.accent,
+                  ),
+                ),
+              ]),
+            ),
+          ],
+          const SizedBox(height: 20),
+          _FieldLabel(text: 'Tax amount (₹, optional)', colors: colors),
+          const SizedBox(height: 6),
+          TextField(
+            controller: taxAmountController,
+            keyboardType:
+                const TextInputType.numberWithOptions(decimal: true),
+            style: TextStyle(color: colors.textPrimary, fontSize: 15),
+            decoration: _inputDecoration(
+                colors: colors, hint: '0', prefix: '₹ '),
+          ),
+          const SizedBox(height: 20),
+          _FieldLabel(
+              text: 'Commission incl. taxes (₹, optional)', colors: colors),
+          const SizedBox(height: 6),
+          TextField(
+            controller: commissionController,
+            keyboardType:
+                const TextInputType.numberWithOptions(decimal: true),
+            style: TextStyle(color: colors.textPrimary, fontSize: 15),
+            decoration: _inputDecoration(
+                colors: colors, hint: '0', prefix: '₹ '),
+          ),
+          const SizedBox(height: 20),
+          _FieldLabel(text: 'TDS & TCS (₹, optional)', colors: colors),
+          const SizedBox(height: 6),
+          TextField(
+            controller: tdsTcsController,
+            keyboardType:
+                const TextInputType.numberWithOptions(decimal: true),
+            style: TextStyle(color: colors.textPrimary, fontSize: 15),
+            decoration: _inputDecoration(
+                colors: colors, hint: '0', prefix: '₹ '),
+          ),
+          if (_grossAmount > 0) ...[
+            const SizedBox(height: 16),
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: colors.successSubtle,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(children: [
+                Text(
+                  'Net received',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: colors.success,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  '₹${_amountFmt.format(_netAmount)}',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: colors.success,
+                  ),
+                ),
+              ]),
             ),
           ],
           const SizedBox(height: 32),
           SizedBox(
             width: double.infinity,
             child: FilledButton(
-              onPressed: (isBusy || !_canSave) ? null : onSave,
+              onPressed: _canNext ? onNext : null,
               style: FilledButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12)),
               ),
-              child: isBusy
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white),
-                    )
-                  : const Text(
-                      'Save booking',
-                      style: TextStyle(
-                          fontSize: 15, fontWeight: FontWeight.w600),
-                    ),
+              child: const Text(
+                'Next',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+              ),
             ),
           ),
         ],
       ),
+    );
+  }
+
+  InputDecoration _inputDecoration({
+    required AppColors colors,
+    required String hint,
+    String? prefix,
+  }) {
+    final border = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(10),
+      borderSide: BorderSide(color: colors.border),
+    );
+    return InputDecoration(
+      prefixText: prefix,
+      prefixStyle: TextStyle(color: colors.textSecondary, fontSize: 15),
+      hintText: hint,
+      hintStyle: TextStyle(color: colors.textHint),
+      filled: true,
+      fillColor: colors.background,
+      border: border,
+      enabledBorder: border,
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: colors.accent, width: 1.5),
+      ),
+      contentPadding:
+          const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
     );
   }
 }
@@ -120,88 +218,6 @@ class _FieldLabel extends StatelessWidget {
         fontSize: 13,
         fontWeight: FontWeight.w600,
         color: colors.textPrimary,
-      ),
-    );
-  }
-}
-
-class _TypeChip extends StatelessWidget {
-  const _TypeChip({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-    required this.colors,
-  });
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-  final AppColors colors;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: selected ? colors.accent : colors.background,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: selected ? colors.accent : colors.border,
-            width: selected ? 1.5 : 1,
-          ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-            color: selected ? Colors.white : colors.textPrimary,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SourceDropdown extends StatelessWidget {
-  const _SourceDropdown({
-    required this.sources,
-    required this.selectedId,
-    required this.onChanged,
-    required this.colors,
-  });
-  final List<BookingSource> sources;
-  final String? selectedId;
-  final ValueChanged<String?> onChanged;
-  final AppColors colors;
-
-  @override
-  Widget build(BuildContext context) {
-    final validId = sources.any((s) => s.id == selectedId) ? selectedId : null;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      decoration: BoxDecoration(
-        color: colors.background,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: colors.border),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: validId,
-          isExpanded: true,
-          hint: Text('Select source',
-              style: TextStyle(color: colors.textHint, fontSize: 14)),
-          dropdownColor: colors.surface,
-          style: TextStyle(color: colors.textPrimary, fontSize: 14),
-          iconEnabledColor: colors.textSecondary,
-          items: sources
-              .map((s) => DropdownMenuItem(value: s.id, child: Text(s.name)))
-              .toList(),
-          onChanged: onChanged,
-        ),
       ),
     );
   }

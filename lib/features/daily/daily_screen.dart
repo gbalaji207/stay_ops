@@ -7,7 +7,6 @@ import '../../core/theme/app_theme.dart';
 import '../../shared/models/booking_group.dart';
 import '../../shared/models/booking_source.dart';
 import '../../shared/models/room.dart';
-import '../booking/booking_form.dart';
 import '../booking/wizard/booking_wizard_extras.dart';
 import '../config/config_cubit.dart';
 import 'daily_cubit.dart';
@@ -83,8 +82,11 @@ class _DailyScreenState extends State<DailyScreen> {
     final cubit = context.read<DailyCubit>();
     final rooms = _rooms(context);
     final sources = _sources(context);
-    final saved = await showBookingFormSheet(context, existingGroup: group);
-    if (saved && mounted) cubit.load(_selectedDate, rooms, sources);
+    final saved = await context.push<bool>(
+      '/booking/new',
+      extra: BookingWizardExtras(existingGroup: group),
+    );
+    if ((saved ?? false) && mounted) cubit.load(_selectedDate, rooms, sources);
   }
 
   Widget _buildBody(BuildContext context, DailyState state) {

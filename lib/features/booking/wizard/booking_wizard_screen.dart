@@ -12,6 +12,7 @@ import 'booking_wizard_extras.dart';
 import 'wizard_step1_room.dart';
 import 'wizard_step2_dates.dart';
 import 'wizard_step3_type_source.dart';
+import 'wizard_step4_review.dart';
 
 class BookingWizardScreen extends StatefulWidget {
   const BookingWizardScreen({super.key, required this.extras});
@@ -31,9 +32,24 @@ class _BookingWizardScreenState extends State<BookingWizardScreen> {
   late DateTime _bookingDate;
   late DateTime _checkIn;
   late DateTime _checkOut;
-  final _amountController = TextEditingController();
   String? _bookingTypeId;
   String? _bookingSourceId;
+
+  // Step 2 controllers
+  final _customerNameController = TextEditingController();
+  final _stayFlexiBookingIdController = TextEditingController();
+  final _otaBookingIdController = TextEditingController();
+
+  // Step 3 controllers (payment)
+  final _amountController = TextEditingController(); // gross amount
+  final _taxAmountController = TextEditingController();
+  final _commissionController = TextEditingController();
+  final _tdsTcsController = TextEditingController();
+
+  // Step 4 only
+  final _notesController = TextEditingController();
+  bool _paymentReceived = false;
+  String? _paymentDestinationId;
 
   @override
   void initState() {
@@ -41,28 +57,74 @@ class _BookingWizardScreenState extends State<BookingWizardScreen> {
     _bookingCubit = BookingCubit(BookingRepository());
 
     final extras = widget.extras;
-    final today = _today();
+    final group = extras.existingGroup;
 
-    _selectedRoomId = extras.prefilledRoomId;
-    _bookingDate = today;
-    _checkIn = extras.prefilledDate ?? today;
-    _checkOut =
-        (extras.prefilledDate ?? today).add(const Duration(days: 1));
+    _selectedRoomId = group?.roomId ?? extras.prefilledRoomId;
+    _bookingDate = group?.bookingDate ?? DateTime.now();
+    _checkIn = group?.checkIn ?? extras.prefilledDate ?? _today();
+    _checkOut = group?.checkOut ??
+        (extras.prefilledDate ?? _today()).add(const Duration(days: 1));
+    _bookingTypeId = group?.bookingTypeId;
+    _bookingSourceId = group?.bookingSourceId;
+    _paymentReceived = group?.paymentReceived ?? false;
+    _paymentDestinationId = group?.paymentDestinationId;
+    _notesController.text = group?.notes ?? '';
+    _customerNameController.text = group?.customerName ?? '';
+    _stayFlexiBookingIdController.text = group?.stayFlexiBookingId ?? '';
+    _otaBookingIdController.text = group?.otaBookingId ?? '';
 
-    final initialPage = extras.prefilledRoomId != null ? 1 : 0;
+    if (group != null && group.totalAmount > 0) {
+      _amountController.text = group.totalAmount.toInt().toString();
+    }
+    if (group?.taxAmount != null) {
+      _taxAmountController.text = group!.taxAmount!.toInt().toString();
+    }
+    if (group?.commissionInclTax != null) {
+      _commissionController.text =
+          group!.commissionInclTax!.toInt().toString();
+    }
+    if (group?.taxDeduction != null) {
+      _tdsTcsController.text = group!.taxDeduction!.toInt().toString();
+    }
+
+    final initialPage = group != null
+        ? 3
+        : extras.prefilledRoomId != null
+            ? 1
+            : 0;
     _currentStep = initialPage;
     _pageController = PageController(initialPage: initialPage);
 
-    _amountController.addListener(_onAmountChanged);
+    // Rebuild when any payment amount changes (drives step 3 net display and
+    // step 4 save button enablement)
+    for (final c in [
+      _amountController,
+      _taxAmountController,
+      _commissionController,
+      _tdsTcsController,
+    ]) {
+      c.addListener(_onAmountChanged);
+    }
   }
 
   @override
   void dispose() {
     _bookingCubit.close();
     _pageController.dispose();
-    _amountController
-      ..removeListener(_onAmountChanged)
-      ..dispose();
+    for (final c in [
+      _amountController,
+      _taxAmountController,
+      _commissionController,
+      _tdsTcsController,
+    ]) {
+      c
+        ..removeListener(_onAmountChanged)
+        ..dispose();
+    }
+    _notesController.dispose();
+    _customerNameController.dispose();
+    _stayFlexiBookingIdController.dispose();
+    _otaBookingIdController.dispose();
     super.dispose();
   }
 
@@ -82,25 +144,59 @@ class _BookingWizardScreenState extends State<BookingWizardScreen> {
     setState(() => _currentStep = step);
   }
 
-  bool get _shouldExitOnBack =>
-      _currentStep == 0 ||
-      (_currentStep == 1 && widget.extras.prefilledRoomId != null);
+  bool get _shouldExitOnBack {
+    if (widget.extras.existingGroup != null) return _currentStep == 3;
+    return _currentStep == 0 ||
+        (_currentStep == 1 && widget.extras.prefilledRoomId != null);
+  }
+
+  void _onSourceChanged(String? sourceId) {
+    setState(() => _bookingSourceId = sourceId);
+    if (sourceId == null) return;
+    final config = context.read<ConfigCubit>().state;
+    if (config is! ConfigLoaded) return;
+    final source =
+        config.bookingSources.where((s) => s.id == sourceId).firstOrNull;
+    final destId = source?.defaultPaymentDestinationId;
+    if (destId != null &&
+        config.paymentDestinations.any((d) => d.id == destId && d.isActive)) {
+      setState(() => _paymentDestinationId = destId);
+    }
+  }
+
+  String? _nullIfEmpty(String text) {
+    final t = text.trim();
+    return t.isEmpty ? null : t;
+  }
+
+  double? _parseOptional(String text) {
+    final t = text.trim();
+    if (t.isEmpty) return null;
+    return double.tryParse(t.replaceAll(',', ''));
+  }
 
   void _handleSave() {
-    final amount =
+    final gross =
         double.tryParse(_amountController.text.replaceAll(',', '')) ?? 0;
     _bookingCubit.checkAndSave(
       BookingGroupInput(
+        existingGroupId: widget.extras.existingGroup?.id,
         roomId: _selectedRoomId!,
         checkIn: _checkIn,
         checkOut: _checkOut,
-        totalAmount: amount,
-        paymentReceived: false,
+        totalAmount: gross,
+        paymentReceived: _paymentReceived,
         bookingDate: _bookingDate,
         bookingTypeId: _bookingTypeId,
         bookingSourceId: _bookingSourceId,
-        notes: null,
-        paymentDestinationId: null,
+        notes: _nullIfEmpty(_notesController.text),
+        paymentDestinationId: _paymentDestinationId,
+        customerName: _nullIfEmpty(_customerNameController.text),
+        stayFlexiBookingId: _nullIfEmpty(_stayFlexiBookingIdController.text),
+        otaBookingId: _nullIfEmpty(_otaBookingIdController.text),
+        taxAmount: _parseOptional(_taxAmountController.text),
+        commissionInclTax: _parseOptional(_commissionController.text),
+        taxDeduction: _parseOptional(_tdsTcsController.text),
       ),
     );
   }
@@ -162,7 +258,6 @@ class _BookingWizardScreenState extends State<BookingWizardScreen> {
             configState.bookingTypes.where((t) => t.isActive).toList();
         final sources =
             configState.bookingSources.where((s) => s.isActive).toList();
-
         return PopScope(
           canPop: _shouldExitOnBack,
           onPopInvokedWithResult: (didPop, _) {
@@ -183,7 +278,9 @@ class _BookingWizardScreenState extends State<BookingWizardScreen> {
                   }
                 },
               ),
-              title: _StepIndicator(currentStep: _currentStep, colors: colors),
+              title: widget.extras.existingGroup != null
+                  ? null
+                  : _StepIndicator(currentStep: _currentStep, colors: colors),
               centerTitle: true,
             ),
             body: PageView(
@@ -198,32 +295,72 @@ class _BookingWizardScreenState extends State<BookingWizardScreen> {
                     _goToStep(1);
                   },
                 ),
-                WizardStep2Dates(
+                WizardStep2Details(
                   bookingDate: _bookingDate,
                   checkIn: _checkIn,
                   checkOut: _checkOut,
-                  amountController: _amountController,
+                  types: types,
+                  allSources: sources,
+                  selectedTypeId: _bookingTypeId,
+                  selectedSourceId: _bookingSourceId,
+                  customerNameController: _customerNameController,
+                  stayFlexiBookingIdController: _stayFlexiBookingIdController,
+                  otaBookingIdController: _otaBookingIdController,
                   onBookingDateChanged: (date) =>
                       setState(() => _bookingDate = date),
                   onStayRangeChanged: (start, end) => setState(() {
                     _checkIn = start;
                     _checkOut = end;
                   }),
-                  onNext: () => _goToStep(2),
-                ),
-                WizardStep3TypeSource(
-                  types: types,
-                  allSources: sources,
-                  selectedTypeId: _bookingTypeId,
-                  selectedSourceId: _bookingSourceId,
                   onTypeSelected: (id) => setState(() {
                     _bookingTypeId = id;
                     _bookingSourceId = null;
                   }),
-                  onSourceChanged: (id) =>
-                      setState(() => _bookingSourceId = id),
+                  onSourceChanged: _onSourceChanged,
+                  onNext: () => _goToStep(2),
+                ),
+                WizardStep3Payment(
+                  checkIn: _checkIn,
+                  checkOut: _checkOut,
+                  grossAmountController: _amountController,
+                  taxAmountController: _taxAmountController,
+                  commissionController: _commissionController,
+                  tdsTcsController: _tdsTcsController,
+                  onNext: () => _goToStep(3),
+                ),
+                WizardStep4Review(
+                  rooms: rooms,
+                  types: types,
+                  allSources: sources,
+                  selectedRoomId: _selectedRoomId,
+                  bookingDate: _bookingDate,
+                  checkIn: _checkIn,
+                  checkOut: _checkOut,
+                  grossAmountController: _amountController,
+                  taxAmountController: _taxAmountController,
+                  commissionController: _commissionController,
+                  tdsTcsController: _tdsTcsController,
+                  selectedTypeId: _bookingTypeId,
+                  selectedSourceId: _bookingSourceId,
+                  customerNameController: _customerNameController,
+                  stayFlexiBookingIdController: _stayFlexiBookingIdController,
+                  otaBookingIdController: _otaBookingIdController,
+                  notesController: _notesController,
+                  onRoomChanged: (id) => setState(() => _selectedRoomId = id),
+                  onBookingDateChanged: (date) =>
+                      setState(() => _bookingDate = date),
+                  onStayRangeChanged: (start, end) => setState(() {
+                    _checkIn = start;
+                    _checkOut = end;
+                  }),
+                  onTypeSelected: (id) => setState(() {
+                    _bookingTypeId = id;
+                    _bookingSourceId = null;
+                  }),
+                  onSourceChanged: _onSourceChanged,
                   onSave: _handleSave,
                   isBusy: isBusy,
+                  isEditMode: widget.extras.existingGroup != null,
                 ),
               ],
             ),
@@ -245,7 +382,7 @@ class _StepIndicator extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       mainAxisSize: MainAxisSize.min,
-      children: List.generate(3, (i) {
+      children: List.generate(4, (i) {
         final isActive = i == currentStep;
         final isVisited = i < currentStep;
         return AnimatedContainer(

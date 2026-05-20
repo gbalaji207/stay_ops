@@ -6,8 +6,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/models/booking_group.dart';
-import '../../booking/booking_form.dart';
 import '../../booking/booking_repository.dart';
+import '../../booking/wizard/booking_wizard_extras.dart';
 import '../../config/config_cubit.dart';
 import '../cubit/home_cubit.dart';
 import '../repository/home_repository.dart';
@@ -56,8 +56,11 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       final group = await BookingRepository().fetchGroupById(groupId);
       if (!context.mounted) return;
-      final saved = await showBookingFormSheet(context, existingGroup: group);
-      if (saved && context.mounted) {
+      final saved = await context.push<bool>(
+        '/booking/new',
+        extra: BookingWizardExtras(existingGroup: group),
+      );
+      if ((saved ?? false) && context.mounted) {
         cubit.refresh(_today, _totalRooms());
       }
     } catch (e) {
