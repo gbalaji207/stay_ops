@@ -81,8 +81,8 @@ class HomeRepository {
     return result;
   }
 
-  // created_at is TIMESTAMPTZ — filter with explicit IST (+05:30) boundaries
-  // so a booking saved at 11pm IST isn't misclassified as "yesterday" by UTC date
+  // booking_date is TIMESTAMPTZ — use IST (+05:30) boundaries so a booking
+  // recorded at any time on a given IST calendar day is included correctly.
   Future<List<BookingGroup>> fetchNewToday(DateTime today) async {
     final startIst = _istBoundary(today);
     final endIst = _istBoundary(today.add(const Duration(days: 1)));
@@ -92,8 +92,8 @@ class HomeRepository {
         .select(_groupSelect)
         .eq('property_id', AppConstants.propertyId)
         .eq('is_active', true)
-        .gte('created_at', startIst)
-        .lt('created_at', endIst);
+        .gte('booking_date', startIst)
+        .lt('booking_date', endIst);
 
     return _parseGroups(rows as List);
   }
@@ -119,8 +119,6 @@ class HomeRepository {
       '${date.month.toString().padLeft(2, '0')}-'
       '${date.day.toString().padLeft(2, '0')}';
 
-  // Builds an ISO-8601 string with fixed IST offset (+05:30).
-  // Never rely on DateTime.toIso8601String() which uses the device's local offset.
   String _istBoundary(DateTime date) {
     final y = date.year.toString().padLeft(4, '0');
     final m = date.month.toString().padLeft(2, '0');

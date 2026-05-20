@@ -51,7 +51,7 @@ class DayStats extends Equatable {
   // Revenue label shown inside heatmap cell (empty for level 0)
   String get revenueLabel {
     if (revenue <= 0) return '';
-    if (revenue >= 1000) return '₹${(revenue / 1000).round()}k';
+    if (revenue >= 1000) return '₹${(revenue / 1000).toStringAsFixed(1)}k';
     return '₹${revenue.toInt()}';
   }
 

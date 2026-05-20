@@ -219,7 +219,7 @@ class _MonthlyScreenState extends State<MonthlyScreen> {
   }
 
   String _fmtRevenue(double amount) {
-    if (amount >= 1000) return '₹${(amount / 1000).round()}k';
+    if (amount >= 1000) return '₹${(amount / 1000).toStringAsFixed(1)}k';
     return '₹${amount.toInt()}';
   }
 

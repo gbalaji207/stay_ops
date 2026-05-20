@@ -51,7 +51,7 @@ class BookingGroupInput {
   }
 
   int get nightCount => checkOut.difference(checkIn).inDays;
-  double get perNightAmount => nightCount > 0 ? totalAmount / nightCount : 0;
+  double get perNightAmount => nightCount > 0 ? netAmount / nightCount : 0;
   double get netAmount =>
       totalAmount - (commissionInclTax ?? 0) - (taxDeduction ?? 0);
 }
