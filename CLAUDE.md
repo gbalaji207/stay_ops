@@ -36,14 +36,18 @@ equatable: ^2.x
 ```
 lib/
 ├── core/
-│   ├── constants.dart          # PROPERTY_ID, ownerPin, staffPin
+│   ├── constants.dart          # propertyId, sfHotelId, ownerPin, staffPin
 │   ├── supabase_config.dart
 │   └── theme/app_theme.dart
 ├── features/
 │   ├── auth/         # pin_screen, auth_cubit
 │   ├── config/       # config_cubit, config_repository (app-level, all roles)
-│   ├── booking/      # entry_screen, booking_form (shared widget), booking_cubit
+│   ├── booking/
+│   │   ├── wizard/   # booking_wizard_screen, wizard_step1–4, booking_wizard_extras,
+│   │   │             # sf_booking_prefill
+│   │   └── widgets/  # stay_flexi_search_dialog
 │   ├── daily/        # daily_screen, daily_cubit
+│   ├── home/         # home_screen, home_cubit, home_repository
 │   ├── monthly/      # monthly_screen, monthly_cubit
 │   ├── reports/      # reports_screen, payment_report_screen, reports_cubit
 │   └── settings/     # owner only — rooms, booking_types, booking_sources, payment_destinations
@@ -208,15 +212,40 @@ Colors are accessed via `Theme.of(context).extension<AppColors>()`. Key tokens (
 
 ---
 
-## BookingForm Widget
+## Booking Wizard
 
-Single widget reused for new entry and edit. Receives `BookingGroup?` — non-null = edit mode.
+All booking entry and editing goes through the unified 4-step wizard at `/booking/new` (`BookingWizardScreen`). The launch mode is controlled by `BookingWizardExtras`:
 
-- Booking source dropdown: filtered by selected type chip. **Hidden entirely** if selected type has no active sources.
-- Payment destination dropdown: pre-filled from selected source's default destination; always shown.
-- Save disabled when: `amount == 0` OR `check_out <= check_in`.
-- Button label: "Save booking" (new) / "Save changes" (edit).
-- Presented as a bottom sheet (modal).
+| Field | Effect |
+|---|---|
+| `existingGroup: BookingGroup` | Edit mode — starts at step 4 pre-populated, AppBar shows "Edit Booking" |
+| `sfPrefill: SfBookingPrefill` | Stay Flexi import — starts at step 4 pre-populated, AppBar shows "New Booking" |
+| `prefilledRoomId` | New booking with room pre-selected — starts at step 2 |
+| *(none)* | New booking — starts at step 1 |
+
+Steps: 1 = Room, 2 = Dates + Guest + Type/Source, 3 = Payment amounts, 4 = Review + Save.
+
+- Step 4 save button: disabled when `grossAmount == 0` OR `checkOut <= checkIn`.
+- Booking source dropdown: filtered by selected type. **Hidden entirely** if selected type has no active sources.
+- Payment destination: auto-filled from source's `defaultPaymentDestinationId` when source is changed; always shown.
+- Back navigation: edit/SF prefill mode exits on back from step 4 (doesn't step back through wizard).
+
+---
+
+## Stay Flexi Integration
+
+Home screen FAB is expandable — **Manual** launches the plain wizard, **Stay Flexi ID** opens `showStayFlexiSearchDialog`.
+
+Dialog flow:
+1. Check `booking_groups` for existing active record with same `stay_flexi_booking_id` → show error if found (`BookingRepository.stayFlexiBookingExists`)
+2. Call edge function `get-booking-info-from-sf` with `{ sfBookingId, hotelId: AppConstants.sfHotelId }`
+3. Parse response into `SfBookingPrefill.fromJson(json, activeSources, activeDestinations)` — matches `booking_source` string against config sources (case-insensitive) to resolve `bookingSourceId` + `bookingTypeId` + default payment destination
+4. Push `/booking/new` with `BookingWizardExtras(sfPrefill: prefill)` → lands on step 4
+
+SF JSON → wizard field mapping:
+- `internal_room_id` → room, `checkin`/`checkout` → stay dates (date part only), `booking_made_on` → booking date
+- `ota_gross_amount` → gross, `ota_tax_amount` → tax, `ota_commission` → commission, `tax_deduction` → TDS/TCS
+- `customer_name`, `sfBookingId`, `ota_booking_id` → respective text fields
 
 ---
 

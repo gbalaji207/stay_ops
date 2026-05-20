@@ -7,7 +7,9 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/models/booking_group.dart';
 import '../../booking/booking_repository.dart';
+import '../../booking/widgets/stay_flexi_search_dialog.dart';
 import '../../booking/wizard/booking_wizard_extras.dart';
+import '../../booking/wizard/sf_booking_prefill.dart';
 import '../../config/config_cubit.dart';
 import '../cubit/home_cubit.dart';
 import '../repository/home_repository.dart';
@@ -25,6 +27,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   late final DateTime _today;
+  bool _fabExpanded = false;
 
   @override
   void initState() {
@@ -150,7 +153,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       backgroundColor: colors.background,
-      body: SafeArea(
+      body: GestureDetector(
+        onTap: _fabExpanded ? () => setState(() => _fabExpanded = false) : null,
+        behavior: HitTestBehavior.translucent,
+        child: SafeArea(
         child: RefreshIndicator(
           onRefresh: () async =>
               context.read<HomeCubit>().refresh(_today, _totalRooms()),
@@ -293,6 +299,7 @@ class _HomeScreenState extends State<HomeScreen> {
               const SliverToBoxAdapter(child: SizedBox(height: 88)),
             ],
           ),
+        ),
         ),
       ),
       floatingActionButton: _buildFab(context, colors),
@@ -450,18 +457,163 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildFab(BuildContext context, AppColors colors) {
     final cubit = context.read<HomeCubit>();
-    return FloatingActionButton(
-      heroTag: 'home_fab',
-      backgroundColor: colors.accent,
-      foregroundColor: Colors.white,
-      elevation: 4,
-      onPressed: () async {
-        final saved = await context.push<bool>('/booking/new');
-        if ((saved ?? false) && context.mounted) {
-          cubit.refresh(_today, _totalRooms());
-        }
-      },
-      child: const Icon(Icons.add, size: 24),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        // Stay Flexi ID option
+        AnimatedOpacity(
+          opacity: _fabExpanded ? 1 : 0,
+          duration: const Duration(milliseconds: 200),
+          child: AnimatedSlide(
+            offset: _fabExpanded ? Offset.zero : const Offset(0, 0.4),
+            duration: const Duration(milliseconds: 200),
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _FabOption(
+                colors: colors,
+                label: 'Stay Flexi ID',
+                icon: Icons.receipt_long_outlined,
+                onTap: _fabExpanded
+                    ? () async {
+                        setState(() => _fabExpanded = false);
+                        if (!context.mounted) return;
+                        final result =
+                            await showStayFlexiSearchDialog(context);
+                        if (result != null && context.mounted) {
+                          final configState =
+                              context.read<ConfigCubit>().state;
+                          final activeSources = configState is ConfigLoaded
+                              ? configState.bookingSources
+                                  .where((s) => s.isActive)
+                                  .toList()
+                              : <dynamic>[];
+                          final activeDestinations =
+                              configState is ConfigLoaded
+                                  ? configState.paymentDestinations
+                                      .where((d) => d.isActive)
+                                      .toList()
+                                  : <dynamic>[];
+                          final prefill = SfBookingPrefill.fromJson(
+                            result,
+                            activeSources: activeSources,
+                            activeDestinations: activeDestinations,
+                          );
+                          if (!context.mounted) return;
+                          final saved = await context.push<bool>(
+                            '/booking/new',
+                            extra: BookingWizardExtras(sfPrefill: prefill),
+                          );
+                          if ((saved ?? false) && context.mounted) {
+                            cubit.refresh(_today, _totalRooms());
+                          }
+                        }
+                      }
+                    : null,
+              ),
+            ),
+          ),
+        ),
+        // Manual option
+        AnimatedOpacity(
+          opacity: _fabExpanded ? 1 : 0,
+          duration: const Duration(milliseconds: 150),
+          child: AnimatedSlide(
+            offset: _fabExpanded ? Offset.zero : const Offset(0, 0.4),
+            duration: const Duration(milliseconds: 150),
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _FabOption(
+                colors: colors,
+                label: 'Manual',
+                icon: Icons.edit_note_rounded,
+                onTap: _fabExpanded
+                    ? () async {
+                        setState(() => _fabExpanded = false);
+                        if (!context.mounted) return;
+                        final saved =
+                            await context.push<bool>('/booking/new');
+                        if ((saved ?? false) && context.mounted) {
+                          cubit.refresh(_today, _totalRooms());
+                        }
+                      }
+                    : null,
+              ),
+            ),
+          ),
+        ),
+        // Main FAB
+        FloatingActionButton(
+          heroTag: 'home_fab',
+          backgroundColor: colors.accent,
+          foregroundColor: Colors.white,
+          elevation: 4,
+          onPressed: () => setState(() => _fabExpanded = !_fabExpanded),
+          child: AnimatedRotation(
+            turns: _fabExpanded ? 0.125 : 0,
+            duration: const Duration(milliseconds: 200),
+            child: const Icon(Icons.add, size: 24),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _FabOption extends StatelessWidget {
+  const _FabOption({
+    required this.colors,
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
+
+  final AppColors colors;
+  final String label;
+  final IconData icon;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        GestureDetector(
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: colors.surface,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: colors.border),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.08),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: colors.textPrimary,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        FloatingActionButton.small(
+          heroTag: 'fab_$label',
+          backgroundColor: colors.accent,
+          foregroundColor: Colors.white,
+          elevation: 2,
+          onPressed: onTap,
+          child: Icon(icon, size: 20),
+        ),
+      ],
     );
   }
 }

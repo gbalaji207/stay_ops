@@ -58,36 +58,49 @@ class _BookingWizardScreenState extends State<BookingWizardScreen> {
 
     final extras = widget.extras;
     final group = extras.existingGroup;
+    final sf = extras.sfPrefill;
 
-    _selectedRoomId = group?.roomId ?? extras.prefilledRoomId;
-    _bookingDate = group?.bookingDate ?? DateTime.now();
-    _checkIn = group?.checkIn ?? extras.prefilledDate ?? _today();
+    _selectedRoomId = group?.roomId ?? sf?.roomId ?? extras.prefilledRoomId;
+    _bookingDate = group?.bookingDate ?? sf?.bookingDate ?? DateTime.now();
+    _checkIn = group?.checkIn ?? sf?.checkIn ?? extras.prefilledDate ?? _today();
     _checkOut = group?.checkOut ??
+        sf?.checkOut ??
         (extras.prefilledDate ?? _today()).add(const Duration(days: 1));
-    _bookingTypeId = group?.bookingTypeId;
-    _bookingSourceId = group?.bookingSourceId;
+    _bookingTypeId = group?.bookingTypeId ?? sf?.bookingTypeId;
+    _bookingSourceId = group?.bookingSourceId ?? sf?.bookingSourceId;
     _paymentReceived = group?.paymentReceived ?? false;
-    _paymentDestinationId = group?.paymentDestinationId;
+    _paymentDestinationId =
+        group?.paymentDestinationId ?? sf?.paymentDestinationId;
     _notesController.text = group?.notes ?? '';
-    _customerNameController.text = group?.customerName ?? '';
-    _stayFlexiBookingIdController.text = group?.stayFlexiBookingId ?? '';
-    _otaBookingIdController.text = group?.otaBookingId ?? '';
+    _customerNameController.text = group?.customerName ?? sf?.customerName ?? '';
+    _stayFlexiBookingIdController.text =
+        group?.stayFlexiBookingId ?? sf?.sfBookingId ?? '';
+    _otaBookingIdController.text =
+        group?.otaBookingId ?? sf?.otaBookingId ?? '';
 
     if (group != null && group.totalAmount > 0) {
       _amountController.text = group.totalAmount.toInt().toString();
+    } else if (sf?.grossAmount != null && sf!.grossAmount! > 0) {
+      _amountController.text = _fmtAmount(sf.grossAmount!);
     }
     if (group?.taxAmount != null) {
       _taxAmountController.text = group!.taxAmount!.toInt().toString();
+    } else if (sf?.taxAmount != null) {
+      _taxAmountController.text = _fmtAmount(sf!.taxAmount!);
     }
     if (group?.commissionInclTax != null) {
       _commissionController.text =
           group!.commissionInclTax!.toInt().toString();
+    } else if (sf?.commissionInclTax != null) {
+      _commissionController.text = _fmtAmount(sf!.commissionInclTax!);
     }
     if (group?.taxDeduction != null) {
       _tdsTcsController.text = group!.taxDeduction!.toInt().toString();
+    } else if (sf?.taxDeduction != null) {
+      _tdsTcsController.text = _fmtAmount(sf!.taxDeduction!);
     }
 
-    final initialPage = group != null
+    final initialPage = (group != null || sf != null)
         ? 3
         : extras.prefilledRoomId != null
             ? 1
@@ -133,6 +146,11 @@ class _BookingWizardScreenState extends State<BookingWizardScreen> {
     return DateTime(now.year, now.month, now.day);
   }
 
+  String _fmtAmount(double v) {
+    if (v == v.truncateToDouble()) return v.toInt().toString();
+    return v.toString();
+  }
+
   void _onAmountChanged() => setState(() {});
 
   void _goToStep(int step) {
@@ -145,7 +163,9 @@ class _BookingWizardScreenState extends State<BookingWizardScreen> {
   }
 
   bool get _shouldExitOnBack {
-    if (widget.extras.existingGroup != null) return _currentStep == 3;
+    if (widget.extras.existingGroup != null || widget.extras.sfPrefill != null) {
+      return _currentStep == 3;
+    }
     return _currentStep == 0 ||
         (_currentStep == 1 && widget.extras.prefilledRoomId != null);
   }
@@ -278,9 +298,16 @@ class _BookingWizardScreenState extends State<BookingWizardScreen> {
                   }
                 },
               ),
-              title: widget.extras.existingGroup != null
-                  ? null
-                  : _StepIndicator(currentStep: _currentStep, colors: colors),
+              title: Text(
+                widget.extras.existingGroup != null
+                    ? 'Edit Booking'
+                    : 'New Booking',
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w600,
+                  color: colors.textPrimary,
+                ),
+              ),
               centerTitle: true,
             ),
             body: PageView(
@@ -371,31 +398,3 @@ class _BookingWizardScreenState extends State<BookingWizardScreen> {
   }
 }
 
-// ── Step progress indicator ───────────────────────────────────────────────────
-
-class _StepIndicator extends StatelessWidget {
-  const _StepIndicator({required this.currentStep, required this.colors});
-  final int currentStep;
-  final AppColors colors;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: List.generate(4, (i) {
-        final isActive = i == currentStep;
-        final isVisited = i < currentStep;
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          margin: const EdgeInsets.symmetric(horizontal: 3),
-          width: isActive ? 24 : 8,
-          height: 8,
-          decoration: BoxDecoration(
-            color: (isActive || isVisited) ? colors.accent : colors.border,
-            borderRadius: BorderRadius.circular(4),
-          ),
-        );
-      }),
-    );
-  }
-}

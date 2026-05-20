@@ -187,6 +187,17 @@ class BookingRepository {
         .eq('is_active', true);
   }
 
+  Future<bool> stayFlexiBookingExists(String sfBookingId) async {
+    final rows = await _client
+        .from('booking_groups')
+        .select('id')
+        .eq('stay_flexi_booking_id', sfBookingId)
+        .eq('property_id', AppConstants.propertyId)
+        .eq('is_active', true)
+        .limit(1);
+    return (rows as List).isNotEmpty;
+  }
+
   Future<BookingGroup> fetchGroupById(String groupId) async {
     final row = await _client
         .from('booking_groups')
