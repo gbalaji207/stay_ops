@@ -40,21 +40,44 @@ lib/
 │   ├── supabase_config.dart
 │   └── theme/app_theme.dart
 ├── features/
-│   ├── auth/         # pin_screen, auth_cubit
-│   ├── config/       # config_cubit, config_repository (app-level, all roles)
+│   ├── auth/         # pin_screen, auth_cubit, auth_state
+│   ├── config/       # config_cubit, config_repository, config_state (app-level, all roles)
 │   ├── booking/
 │   │   ├── wizard/   # booking_wizard_screen, wizard_step1–4, booking_wizard_extras,
-│   │   │             # sf_booking_prefill
+│   │   │             # sf_booking_prefill, booking_group_input
 │   │   └── widgets/  # stay_flexi_search_dialog
-│   ├── daily/        # daily_screen, daily_cubit
-│   ├── home/         # home_screen, home_cubit, home_repository
-│   ├── monthly/      # monthly_screen, monthly_cubit
-│   ├── reports/      # reports_screen, payment_report_screen, reports_cubit
+│   ├── daily/        # daily_screen, daily_cubit, daily_repository, room_day_status, day_booking_row
+│   ├── home/
+│   │   ├── cubit/        # home_cubit, home_state
+│   │   ├── repository/   # home_repository
+│   │   ├── screens/      # home_screen
+│   │   └── widgets/      # booking_card, occupancy_strip, upcoming_card, new_booking_row
+│   ├── monthly/      # monthly_screen, monthly_cubit, monthly_repository, month_booking_row, day_stats
+│   ├── reports/      # reports_screen, payment_report_screen, reports_cubit, reports_repository
 │   └── settings/     # owner only — rooms, booking_types, booking_sources, payment_destinations
 └── shared/
     ├── models/       # room, booking_type, booking_source, booking_group, booking_day,
-    │                 # payment_destination, room_payment_summary
-    └── widgets/      # stat_card, conflict_dialog
+    │                 # payment_destination, room_payment_summary, occupancy_snapshot
+    └── widgets/      # conflict_dialog, app_text_field, app_dropdown_field,
+                      # app_date_picker, app_date_range_picker
+```
+
+---
+
+## Shared Form Widgets
+
+All form fields use these four components. Never use raw `TextField` or `DropdownButton` in new UI — always use the shared widgets for consistent floating labels, theming, and border behavior.
+
+| Widget | Use for |
+|---|---|
+| `AppTextField` | Any text input. Supports `prefixText` (e.g. `'₹ '`), `maxLines`, `fontSize`, `hintText`. |
+| `AppDropdownField<T>` | Dropdowns. Generic over value type. Set `searchable: true` for large lists (opens a search dialog). Items are `AppDropdownItem<T>`. |
+| `AppDatePicker` | Single date. Set `includeTime: true` for a date+time chain. Accepts `firstDate`/`lastDate`. |
+| `AppDateRangePicker` | Check-in → check-out pair. Calls `showDateRangePicker`. Takes `checkIn`, `checkOut`, `onRangeSelected`. |
+
+All four use `Theme.of(context).extension<AppColors>()!` — never static color references. When a source dropdown value depends on a filtered list, guard it:
+```dart
+value: filteredSources.any((s) => s.id == selectedSourceId) ? selectedSourceId : null,
 ```
 
 ---
@@ -223,7 +246,7 @@ All booking entry and editing goes through the unified 4-step wizard at `/bookin
 | `prefilledRoomId` | New booking with room pre-selected — starts at step 2 |
 | *(none)* | New booking — starts at step 1 |
 
-Steps: 1 = Room, 2 = Dates + Guest + Type/Source, 3 = Payment amounts, 4 = Review + Save.
+Steps: 1 = Room (`wizard_step1_room.dart`), 2 = Dates + Guest + Type/Source (`wizard_step2_dates.dart` → class `WizardStep2Details`), 3 = Payment amounts (`wizard_step3_type_source.dart` → class `WizardStep3Payment`), 4 = Review + Save (`wizard_step4_review.dart`).
 
 - Step 4 save button: disabled when `grossAmount == 0` OR `checkOut <= checkIn`.
 - Booking source dropdown: filtered by selected type. **Hidden entirely** if selected type has no active sources.

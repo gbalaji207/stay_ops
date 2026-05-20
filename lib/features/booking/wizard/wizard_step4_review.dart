@@ -5,6 +5,10 @@ import '../../../core/theme/app_theme.dart';
 import '../../../shared/models/booking_source.dart';
 import '../../../shared/models/booking_type.dart';
 import '../../../shared/models/room.dart';
+import '../../../shared/widgets/app_date_picker.dart';
+import '../../../shared/widgets/app_date_range_picker.dart';
+import '../../../shared/widgets/app_dropdown_field.dart';
+import '../../../shared/widgets/app_text_field.dart';
 
 class WizardStep4Review extends StatelessWidget {
   const WizardStep4Review({
@@ -65,14 +69,20 @@ class WizardStep4Review extends StatelessWidget {
   static final _amountFmt = NumberFormat('#,##0.##');
 
   int get _nightCount => checkOut.difference(checkIn).inDays;
+
   double get _grossAmount =>
       double.tryParse(grossAmountController.text.replaceAll(',', '')) ?? 0;
+
   double get _perNight => _nightCount > 0 ? _grossAmount / _nightCount : 0;
+
   double get _commissionAmount =>
       double.tryParse(commissionController.text.replaceAll(',', '')) ?? 0;
+
   double get _tdsTcsAmount =>
       double.tryParse(tdsTcsController.text.replaceAll(',', '')) ?? 0;
+
   double get _netAmount => _grossAmount - _commissionAmount - _tdsTcsAmount;
+
   bool get _canSave =>
       _grossAmount > 0 && _nightCount > 0 && selectedRoomId != null;
 
@@ -88,49 +98,11 @@ class WizardStep4Review extends StatelessWidget {
     return DateTime(now.year, now.month, now.day);
   }
 
-  Future<void> _pickBookingDateTime(BuildContext context) async {
-    final today = _today();
-    final pickedDate = await showDatePicker(
-      context: context,
-      initialDate:
-          DateTime(bookingDate.year, bookingDate.month, bookingDate.day),
-      firstDate: today.subtract(const Duration(days: 365)),
-      lastDate: today.add(const Duration(days: 30)),
-    );
-    if (pickedDate == null || !context.mounted) return;
-
-    final pickedTime = await showTimePicker(
-      context: context,
-      initialTime:
-          TimeOfDay(hour: bookingDate.hour, minute: bookingDate.minute),
-    );
-    if (!context.mounted) return;
-
-    final t = pickedTime ??
-        TimeOfDay(hour: bookingDate.hour, minute: bookingDate.minute);
-    onBookingDateChanged(DateTime(
-      pickedDate.year, pickedDate.month, pickedDate.day, t.hour, t.minute,
-    ));
-  }
-
-  Future<void> _pickStayRange(BuildContext context) async {
-    final today = _today();
-    final picked = await showDateRangePicker(
-      context: context,
-      initialDateRange: DateTimeRange(start: checkIn, end: checkOut),
-      firstDate: today.subtract(const Duration(days: 365)),
-      lastDate: today.add(const Duration(days: 730)),
-    );
-    if (picked == null || !context.mounted) return;
-    onStayRangeChanged(picked.start, picked.end);
-  }
-
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).extension<AppColors>()!;
-    final dateFmt = DateFormat('d MMM');
-    final dtFmt = DateFormat('d MMM yyyy, HH:mm');
     final filteredSources = _filteredSources;
+    final today = _today();
 
     return Column(
       children: [
@@ -145,82 +117,49 @@ class WizardStep4Review extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-
                 // ── BOOKING ──────────────────────────────────────
                 _SectionHeader(title: 'Booking', colors: colors),
-                _FieldLabel(text: 'Room', colors: colors),
-                const SizedBox(height: 6),
-                _RoomDropdown(
-                  rooms: rooms,
-                  selectedId: selectedRoomId,
+                AppDropdownField<String>(
+                  label: 'Room',
+                  items: rooms
+                      .map((r) => AppDropdownItem(value: r.id, label: r.name))
+                      .toList(),
+                  value: selectedRoomId,
                   onChanged: onRoomChanged,
-                  colors: colors,
                 ),
                 const SizedBox(height: 16),
-                _FieldLabel(text: 'Booking date & time', colors: colors),
-                const SizedBox(height: 6),
-                _DateTile(
-                  label: dtFmt.format(bookingDate),
-                  icon: Icons.schedule_outlined,
-                  onTap: () => _pickBookingDateTime(context),
-                  colors: colors,
+                AppDatePicker(
+                  label: 'Booking date & time',
+                  selectedDate: bookingDate,
+                  onDateSelected: onBookingDateChanged,
+                  includeTime: true,
+                  firstDate: today.subtract(const Duration(days: 365)),
+                  lastDate: today.add(const Duration(days: 30)),
                 ),
-
-                // ── STAY ─────────────────────────────────────────
-                const SizedBox(height: 28),
-                _SectionHeader(title: 'Stay', colors: colors),
-                _FieldLabel(text: 'Stay dates', colors: colors),
-                const SizedBox(height: 6),
-                _DateRangeTile(
-                  checkIn: checkIn,
-                  checkOut: checkOut,
-                  dateFmt: dateFmt,
-                  onTap: () => _pickStayRange(context),
-                  colors: colors,
-                ),
-                const SizedBox(height: 10),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: colors.accentSubtle,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    '$_nightCount night${_nightCount == 1 ? '' : 's'}',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      color: colors.accent,
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: AppDateRangePicker(
+                        label: 'Stay dates',
+                        checkIn: checkIn,
+                        checkOut: checkOut,
+                        onRangeSelected: onStayRangeChanged,
+                        firstDate: today.subtract(const Duration(days: 365)),
+                        lastDate: today.add(const Duration(days: 730)),
+                      ),
                     ),
-                  ),
-                ),
-
-                // ── PAYMENT ──────────────────────────────────────
-                const SizedBox(height: 28),
-                _SectionHeader(title: 'Payment', colors: colors),
-                _FieldLabel(text: 'Gross amount (₹)', colors: colors),
-                const SizedBox(height: 6),
-                TextField(
-                  controller: grossAmountController,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  style:
-                      TextStyle(color: colors.textPrimary, fontSize: 15),
-                  decoration: _inputDecoration(
-                      colors: colors, hint: '0', prefix: '₹ '),
-                ),
-                if (_grossAmount > 0 && _nightCount > 0) ...[
-                  const SizedBox(height: 10),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: colors.accentSubtle,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(children: [
-                      Text(
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: colors.accentSubtle,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
                         '$_nightCount night${_nightCount == 1 ? '' : 's'}',
                         style: TextStyle(
                           fontSize: 13,
@@ -228,108 +167,9 @@ class WizardStep4Review extends StatelessWidget {
                           color: colors.accent,
                         ),
                       ),
-                      const Spacer(),
-                      Text(
-                        '₹${_amountFmt.format(_perNight)} / night',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          color: colors.accent,
-                        ),
-                      ),
-                    ]),
-                  ),
-                ],
-                const SizedBox(height: 16),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _FieldLabel(
-                              text: 'Tax (₹, optional)', colors: colors),
-                          const SizedBox(height: 6),
-                          TextField(
-                            controller: taxAmountController,
-                            keyboardType: const TextInputType.numberWithOptions(
-                                decimal: true),
-                            style: TextStyle(
-                                color: colors.textPrimary, fontSize: 15),
-                            decoration: _inputDecoration(
-                                colors: colors, hint: '0', prefix: '₹ '),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _FieldLabel(
-                              text: 'TDS & TCS (₹, optional)',
-                              colors: colors),
-                          const SizedBox(height: 6),
-                          TextField(
-                            controller: tdsTcsController,
-                            keyboardType: const TextInputType.numberWithOptions(
-                                decimal: true),
-                            style: TextStyle(
-                                color: colors.textPrimary, fontSize: 15),
-                            decoration: _inputDecoration(
-                                colors: colors, hint: '0', prefix: '₹ '),
-                          ),
-                        ],
-                      ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
-                _FieldLabel(
-                    text: 'Commission incl. taxes (₹, optional)',
-                    colors: colors),
-                const SizedBox(height: 6),
-                TextField(
-                  controller: commissionController,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  style:
-                      TextStyle(color: colors.textPrimary, fontSize: 15),
-                  decoration: _inputDecoration(
-                      colors: colors, hint: '0', prefix: '₹ '),
-                ),
-                if (_grossAmount > 0) ...[
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: colors.successSubtle,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(children: [
-                      Text(
-                        'Net received',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          color: colors.success,
-                        ),
-                      ),
-                      const Spacer(),
-                      Text(
-                        '₹${_amountFmt.format(_netAmount)}',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: colors.success,
-                        ),
-                      ),
-                    ]),
-                  ),
-                ],
 
                 // ── BOOKING DETAILS ───────────────────────────────
                 const SizedBox(height: 28),
@@ -338,54 +178,49 @@ class WizardStep4Review extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _FieldLabel(
-                              text: 'Booking type', colors: colors),
-                          const SizedBox(height: 6),
-                          _TypeDropdown(
-                            types: types,
-                            selectedId: selectedTypeId,
-                            onChanged: onTypeSelected,
-                            colors: colors,
+                      child: AppDropdownField<String?>(
+                        label: 'Booking type',
+                        items: [
+                          const AppDropdownItem(
+                            value: null,
+                            label: '— Not specified —',
+                          ),
+                          ...types.map(
+                            (t) => AppDropdownItem(value: t.id, label: t.name),
                           ),
                         ],
+                        value: selectedTypeId,
+                        onChanged: onTypeSelected,
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _FieldLabel(
-                              text: 'Booking source', colors: colors),
-                          const SizedBox(height: 6),
-                          _SourceDropdown(
-                            sources: filteredSources,
-                            selectedId: selectedSourceId,
-                            selectedTypeId: selectedTypeId,
-                            onChanged: filteredSources.isEmpty
-                                ? null
-                                : onSourceChanged,
-                            colors: colors,
-                          ),
-                        ],
+                      child: AppDropdownField<String>(
+                        label: 'Booking source',
+                        items: filteredSources
+                            .map(
+                              (s) =>
+                                  AppDropdownItem(value: s.id, label: s.name),
+                            )
+                            .toList(),
+                        value:
+                            filteredSources.any((s) => s.id == selectedSourceId)
+                            ? selectedSourceId
+                            : null,
+                        enabled: filteredSources.isNotEmpty,
+                        hintText: selectedTypeId == null
+                            ? 'Select type first'
+                            : 'None available',
+                        onChanged: onSourceChanged,
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 16),
-                _FieldLabel(
-                    text: 'Customer name (optional)', colors: colors),
-                const SizedBox(height: 6),
-                TextField(
+                AppTextField(
                   controller: customerNameController,
+                  label: 'Customer name (optional)',
                   textCapitalization: TextCapitalization.words,
-                  style:
-                      TextStyle(color: colors.textPrimary, fontSize: 14),
-                  decoration: _inputDecoration(
-                      colors: colors, hint: 'e.g. John Smith'),
                 ),
                 const SizedBox(height: 16),
                 Row(
@@ -395,16 +230,9 @@ class WizardStep4Review extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _FieldLabel(
-                              text: 'Stay Flexi ID (optional)',
-                              colors: colors),
-                          const SizedBox(height: 6),
-                          TextField(
+                          AppTextField(
                             controller: stayFlexiBookingIdController,
-                            style: TextStyle(
-                                color: colors.textPrimary, fontSize: 14),
-                            decoration: _inputDecoration(
-                                colors: colors, hint: 'e.g. SF-123456'),
+                            label: 'Stay Flexi ID (optional)',
                           ),
                         ],
                       ),
@@ -414,16 +242,9 @@ class WizardStep4Review extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _FieldLabel(
-                              text: 'OTA booking ID (optional)',
-                              colors: colors),
-                          const SizedBox(height: 6),
-                          TextField(
+                          AppTextField(
                             controller: otaBookingIdController,
-                            style: TextStyle(
-                                color: colors.textPrimary, fontSize: 14),
-                            decoration: _inputDecoration(
-                                colors: colors, hint: 'e.g. MMT-987654'),
+                            label: 'OTA booking ID (optional)',
                           ),
                         ],
                       ),
@@ -431,15 +252,136 @@ class WizardStep4Review extends StatelessWidget {
                   ],
                 ),
 
+                // ── PAYMENT ──────────────────────────────────────
+                const SizedBox(height: 28),
+                _SectionHeader(title: 'Payment', colors: colors),
+                Row(
+                  children: [
+                    Expanded(
+                      child: AppTextField(
+                        controller: grossAmountController,
+                        label: 'Gross amount (₹)',
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        prefixText: '₹ ',
+                        fontSize: 15,
+                      ),
+                    ),
+                    if (_grossAmount > 0 && _nightCount > 0) ...[
+                      const SizedBox(width: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: colors.accentSubtle,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          '₹${_amountFmt.format(_perNight)} / night',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: colors.accent,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          AppTextField(
+                            controller: taxAmountController,
+                            label: 'Tax (₹, optional)',
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            prefixText: '₹ ',
+                            fontSize: 15,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          AppTextField(
+                            controller: tdsTcsController,
+                            label: 'TDS & TCS (₹, optional)',
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            prefixText: '₹ ',
+                            fontSize: 15,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                AppTextField(
+                  controller: commissionController,
+                  label: 'Commission incl. taxes (₹, optional)',
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  prefixText: '₹ ',
+                  fontSize: 15,
+                ),
+                if (_grossAmount > 0) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: colors.successSubtle,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        Text(
+                          'Net amount',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: colors.success,
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          '₹${_amountFmt.format(_netAmount)}',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: colors.success,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
                 // ── NOTES ────────────────────────────────────────
                 const SizedBox(height: 28),
-                _SectionHeader(title: 'Notes', colors: colors),
-                TextField(
+                AppTextField(
                   controller: notesController,
+                  label: 'Notes',
                   maxLines: 3,
-                  style: TextStyle(color: colors.textPrimary, fontSize: 13),
-                  decoration:
-                      _inputDecoration(colors: colors, hint: 'Add any notes...'),
+                  fontSize: 13,
                 ),
                 const SizedBox(height: 24),
               ],
@@ -457,51 +399,29 @@ class WizardStep4Review extends StatelessWidget {
               style: FilledButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
               child: isBusy
                   ? const SizedBox(
                       height: 20,
                       width: 20,
                       child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white),
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
                     )
                   : Text(
                       isEditMode ? 'Save changes' : 'Save booking',
                       style: const TextStyle(
-                          fontSize: 15, fontWeight: FontWeight.w600),
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
             ),
           ),
         ),
       ],
-    );
-  }
-
-  InputDecoration _inputDecoration({
-    required AppColors colors,
-    required String hint,
-    String? prefix,
-  }) {
-    final border = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: BorderSide(color: colors.border),
-    );
-    return InputDecoration(
-      prefixText: prefix,
-      prefixStyle: TextStyle(color: colors.textSecondary, fontSize: 15),
-      hintText: hint,
-      hintStyle: TextStyle(color: colors.textHint),
-      filled: true,
-      fillColor: colors.background,
-      border: border,
-      enabledBorder: border,
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: BorderSide(color: colors.accent, width: 1.5),
-      ),
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
     );
   }
 }
@@ -510,6 +430,7 @@ class WizardStep4Review extends StatelessWidget {
 
 class _SectionHeader extends StatelessWidget {
   const _SectionHeader({required this.title, required this.colors});
+
   final String title;
   final AppColors colors;
 
@@ -524,257 +445,6 @@ class _SectionHeader extends StatelessWidget {
           fontWeight: FontWeight.w700,
           color: colors.textSecondary,
           letterSpacing: 0.8,
-        ),
-      ),
-    );
-  }
-}
-
-class _FieldLabel extends StatelessWidget {
-  const _FieldLabel({required this.text, required this.colors});
-  final String text;
-  final AppColors colors;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: TextStyle(
-        fontSize: 13,
-        fontWeight: FontWeight.w600,
-        color: colors.textPrimary,
-      ),
-    );
-  }
-}
-
-class _DateTile extends StatelessWidget {
-  const _DateTile({
-    required this.label,
-    required this.icon,
-    required this.onTap,
-    required this.colors,
-  });
-  final String label;
-  final IconData icon;
-  final VoidCallback onTap;
-  final AppColors colors;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: colors.background,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: colors.border),
-        ),
-        child: Row(children: [
-          Icon(icon, size: 15, color: colors.textSecondary),
-          const SizedBox(width: 8),
-          Text(
-            label,
-            style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: colors.textPrimary),
-          ),
-        ]),
-      ),
-    );
-  }
-}
-
-class _DateRangeTile extends StatelessWidget {
-  const _DateRangeTile({
-    required this.checkIn,
-    required this.checkOut,
-    required this.dateFmt,
-    required this.onTap,
-    required this.colors,
-  });
-  final DateTime checkIn;
-  final DateTime checkOut;
-  final DateFormat dateFmt;
-  final VoidCallback onTap;
-  final AppColors colors;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: colors.background,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: colors.border),
-        ),
-        child: Row(children: [
-          Icon(Icons.date_range_outlined,
-              size: 15, color: colors.textSecondary),
-          const SizedBox(width: 8),
-          Text(
-            dateFmt.format(checkIn),
-            style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: colors.textPrimary),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: Icon(Icons.arrow_forward,
-                size: 14, color: colors.textSecondary),
-          ),
-          Text(
-            dateFmt.format(checkOut),
-            style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: colors.textPrimary),
-          ),
-        ]),
-      ),
-    );
-  }
-}
-
-class _RoomDropdown extends StatelessWidget {
-  const _RoomDropdown({
-    required this.rooms,
-    required this.selectedId,
-    required this.onChanged,
-    required this.colors,
-  });
-  final List<Room> rooms;
-  final String? selectedId;
-  final ValueChanged<String?> onChanged;
-  final AppColors colors;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      decoration: BoxDecoration(
-        color: colors.background,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: colors.border),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: selectedId,
-          isExpanded: true,
-          hint: Text('Select room',
-              style: TextStyle(color: colors.textHint, fontSize: 14)),
-          dropdownColor: colors.surface,
-          style: TextStyle(color: colors.textPrimary, fontSize: 14),
-          iconEnabledColor: colors.textSecondary,
-          items: rooms
-              .map((r) => DropdownMenuItem(value: r.id, child: Text(r.name)))
-              .toList(),
-          onChanged: onChanged,
-        ),
-      ),
-    );
-  }
-}
-
-class _TypeDropdown extends StatelessWidget {
-  const _TypeDropdown({
-    required this.types,
-    required this.selectedId,
-    required this.onChanged,
-    required this.colors,
-  });
-  final List<BookingType> types;
-  final String? selectedId;
-  final ValueChanged<String?> onChanged;
-  final AppColors colors;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      decoration: BoxDecoration(
-        color: colors.background,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: colors.border),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: selectedId,
-          isExpanded: true,
-          hint: Text('Select type',
-              style: TextStyle(color: colors.textHint, fontSize: 14)),
-          dropdownColor: colors.surface,
-          style: TextStyle(color: colors.textPrimary, fontSize: 14),
-          iconEnabledColor: colors.textSecondary,
-          items: [
-            DropdownMenuItem<String>(
-              value: null,
-              child: Text('— Not specified —',
-                  style: TextStyle(color: colors.textHint)),
-            ),
-            ...types.map((t) =>
-                DropdownMenuItem<String>(value: t.id, child: Text(t.name))),
-          ],
-          onChanged: onChanged,
-        ),
-      ),
-    );
-  }
-}
-
-class _SourceDropdown extends StatelessWidget {
-  const _SourceDropdown({
-    required this.sources,
-    required this.selectedId,
-    required this.selectedTypeId,
-    required this.onChanged,
-    required this.colors,
-  });
-  final List<BookingSource> sources;
-  final String? selectedId;
-  final String? selectedTypeId;
-  final ValueChanged<String?>? onChanged;
-  final AppColors colors;
-
-  @override
-  Widget build(BuildContext context) {
-    final isEnabled = onChanged != null && sources.isNotEmpty;
-    final validId = sources.any((s) => s.id == selectedId) ? selectedId : null;
-    final disabledText = selectedTypeId == null
-        ? '— Select type first —'
-        : '— None available —';
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      decoration: BoxDecoration(
-        color: colors.background,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: colors.border),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: isEnabled ? validId : null,
-          isExpanded: true,
-          hint: Text('Select source',
-              style: TextStyle(color: colors.textHint, fontSize: 14)),
-          disabledHint: Text(disabledText,
-              style: TextStyle(color: colors.textHint, fontSize: 13)),
-          dropdownColor: colors.surface,
-          style: TextStyle(color: colors.textPrimary, fontSize: 14),
-          iconEnabledColor: colors.textSecondary,
-          iconDisabledColor: colors.textHint,
-          items: isEnabled
-              ? sources
-                  .map((s) =>
-                      DropdownMenuItem(value: s.id, child: Text(s.name)))
-                  .toList()
-              : null,
-          onChanged: isEnabled ? onChanged : null,
         ),
       ),
     );

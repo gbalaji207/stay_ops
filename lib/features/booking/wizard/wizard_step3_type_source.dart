@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../../shared/widgets/app_text_field.dart';
 
 class WizardStep3Payment extends StatelessWidget {
   const WizardStep3Payment({
@@ -50,108 +51,111 @@ class WizardStep3Payment extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _FieldLabel(text: 'Gross amount (₹)', colors: colors),
-          const SizedBox(height: 6),
-          TextField(
-            controller: grossAmountController,
-            keyboardType:
-                const TextInputType.numberWithOptions(decimal: true),
-            style: TextStyle(color: colors.textPrimary, fontSize: 15),
-            decoration: _inputDecoration(
-                colors: colors, hint: '0', prefix: '₹ '),
-          ),
-          if (_grossAmount > 0 && _nightCount > 0) ...[
-            const SizedBox(height: 10),
-            Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: colors.accentSubtle,
-                borderRadius: BorderRadius.circular(8),
+          Row(
+            children: [
+              Expanded(
+                child: AppTextField(
+                  controller: grossAmountController,
+                  label: 'Gross amount (₹)',
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  prefixText: '₹ ',
+                  fontSize: 15,
+                ),
               ),
-              child: Row(children: [
-                Text(
-                  '$_nightCount night${_nightCount == 1 ? '' : 's'}',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: colors.accent,
+              if (_grossAmount > 0 && _nightCount > 0) ...[
+                const SizedBox(width: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: colors.accentSubtle,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '₹${_amountFmt.format(_perNight)} / night',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: colors.accent,
+                    ),
                   ),
                 ),
-                const Spacer(),
-                Text(
-                  '₹${_amountFmt.format(_perNight)} / night',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: colors.accent,
-                  ),
-                ),
-              ]),
-            ),
-          ],
-          const SizedBox(height: 20),
-          _FieldLabel(text: 'Tax amount (₹, optional)', colors: colors),
-          const SizedBox(height: 6),
-          TextField(
-            controller: taxAmountController,
-            keyboardType:
-                const TextInputType.numberWithOptions(decimal: true),
-            style: TextStyle(color: colors.textPrimary, fontSize: 15),
-            decoration: _inputDecoration(
-                colors: colors, hint: '0', prefix: '₹ '),
+              ],
+            ],
           ),
-          const SizedBox(height: 20),
-          _FieldLabel(
-              text: 'Commission incl. taxes (₹, optional)', colors: colors),
-          const SizedBox(height: 6),
-          TextField(
+          const SizedBox(height: 16),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: AppTextField(
+                  controller: taxAmountController,
+                  label: 'Tax (₹, optional)',
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  prefixText: '₹ ',
+                  fontSize: 15,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: AppTextField(
+                  controller: tdsTcsController,
+                  label: 'TDS & TCS (₹, optional)',
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  prefixText: '₹ ',
+                  fontSize: 15,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          AppTextField(
             controller: commissionController,
-            keyboardType:
-                const TextInputType.numberWithOptions(decimal: true),
-            style: TextStyle(color: colors.textPrimary, fontSize: 15),
-            decoration: _inputDecoration(
-                colors: colors, hint: '0', prefix: '₹ '),
-          ),
-          const SizedBox(height: 20),
-          _FieldLabel(text: 'TDS & TCS (₹, optional)', colors: colors),
-          const SizedBox(height: 6),
-          TextField(
-            controller: tdsTcsController,
-            keyboardType:
-                const TextInputType.numberWithOptions(decimal: true),
-            style: TextStyle(color: colors.textPrimary, fontSize: 15),
-            decoration: _inputDecoration(
-                colors: colors, hint: '0', prefix: '₹ '),
+            label: 'Commission incl. taxes (₹, optional)',
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            prefixText: '₹ ',
+            fontSize: 15,
           ),
           if (_grossAmount > 0) ...[
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 10,
+              ),
               decoration: BoxDecoration(
                 color: colors.successSubtle,
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Row(children: [
-                Text(
-                  'Net received',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: colors.success,
+              child: Row(
+                children: [
+                  Text(
+                    'Net received',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: colors.success,
+                    ),
                   ),
-                ),
-                const Spacer(),
-                Text(
-                  '₹${_amountFmt.format(_netAmount)}',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: colors.success,
+                  const Spacer(),
+                  Text(
+                    '₹${_amountFmt.format(_netAmount)}',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: colors.success,
+                    ),
                   ),
-                ),
-              ]),
+                ],
+              ),
             ),
           ],
           const SizedBox(height: 32),
@@ -162,7 +166,8 @@ class WizardStep3Payment extends StatelessWidget {
               style: FilledButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
               child: const Text(
                 'Next',
@@ -171,53 +176,6 @@ class WizardStep3Payment extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  InputDecoration _inputDecoration({
-    required AppColors colors,
-    required String hint,
-    String? prefix,
-  }) {
-    final border = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: BorderSide(color: colors.border),
-    );
-    return InputDecoration(
-      prefixText: prefix,
-      prefixStyle: TextStyle(color: colors.textSecondary, fontSize: 15),
-      hintText: hint,
-      hintStyle: TextStyle(color: colors.textHint),
-      filled: true,
-      fillColor: colors.background,
-      border: border,
-      enabledBorder: border,
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: BorderSide(color: colors.accent, width: 1.5),
-      ),
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-    );
-  }
-}
-
-// ── Private helpers ───────────────────────────────────────────────────────────
-
-class _FieldLabel extends StatelessWidget {
-  const _FieldLabel({required this.text, required this.colors});
-  final String text;
-  final AppColors colors;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: TextStyle(
-        fontSize: 13,
-        fontWeight: FontWeight.w600,
-        color: colors.textPrimary,
       ),
     );
   }
