@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Mobile-first hospitality income tracker. Flutter Android APK + Supabase backend. Single property per install.
+Mobile-first hospitality income tracker. Flutter Android APK + Supabase backend. Supports multiple properties per PIN.
 
 ---
 
@@ -15,6 +15,7 @@ flutter build apk        # release APK
 flutter test             # all tests
 flutter test test/widget_test.dart   # single test file
 flutter analyze          # static analysis (flutter_lints)
+dart analyze lib/        # faster targeted analysis
 ```
 
 ---
@@ -27,6 +28,7 @@ flutter_bloc: ^9.x       # Cubit pattern only — no full Bloc
 go_router: ^17.x
 intl: ^0.20
 equatable: ^2.x
+shared_preferences: ^2.x  # persists last selected property across sessions
 ```
 
 ---
@@ -36,7 +38,7 @@ equatable: ^2.x
 ```
 lib/
 ├── core/
-│   ├── constants.dart          # propertyId, sfHotelId, ownerPin, staffPin
+│   ├── constants.dart          # AppConstants (propertyId/sfHotelId getters) + AppSession (mutable active property)
 │   ├── supabase_config.dart
 │   └── theme/app_theme.dart
 ├── features/
@@ -58,7 +60,8 @@ lib/
 │   └── settings/     # owner only — rooms, booking_types, booking_sources, payment_destinations
 └── shared/
     ├── models/       # room, booking_type, booking_source, booking_group, booking_day,
-    │                 # payment_destination, room_payment_summary, occupancy_snapshot
+    │                 # payment_destination, room_payment_summary, occupancy_snapshot,
+    │                 # property_info
     └── widgets/      # conflict_dialog, app_text_field, app_dropdown_field,
                       # app_date_picker, app_date_range_picker
 ```
@@ -85,18 +88,36 @@ value: filteredSources.any((s) => s.id == selectedSourceId) ? selectedSourceId :
 
 ## Auth
 
-Fully local — no network call. Two hardcoded PINs in `constants.dart`.
+PIN verification is async — queries Supabase `pins` table. PINs are **not** hardcoded.
 
 ```dart
 enum UserRole { none, staff, owner }
-// States: AuthInitial | AuthAuthenticated(role) | AuthError(message)
+// States: AuthInitial | AuthLoading | AuthAuthenticated(role, properties, activePropertyId) | AuthError(message)
 ```
 
-On 4th digit entered → auto-submit (no confirm button). Wrong PIN → shake + error → auto-clear after 2s.
+On 4th digit entered → auto-submit → emits `AuthLoading` (shows spinner) → Supabase lookup → `AuthAuthenticated` or `AuthError`. Wrong PIN → shake + error → auto-clear after 2s.
 
-After `AuthAuthenticated` is emitted → immediately call `ConfigCubit.loadConfig()` for **all roles** → navigate `/daily`.
+After `AuthAuthenticated` is emitted → `app.dart` `BlocListener` calls `ConfigCubit.loadConfig()` for **all roles** → GoRouter navigates to `/home`.
 
 The PIN screen is always rendered in dark theme regardless of system setting.
+
+### Multi-property
+
+`AuthAuthenticated` carries `List<PropertyInfo> properties` and `String activePropertyId`. On login, the last selected property (stored in `SharedPreferences` under `last_active_property_id`) is restored if it still belongs to the PIN — otherwise defaults to `properties.first`.
+
+`AuthCubit.switchProperty(id)` updates `AppSession`, persists the new ID, and re-emits `AuthAuthenticated`. This triggers the `app.dart` listener which reloads config for the new property.
+
+### AppSession & AppConstants
+
+`AppConstants.propertyId` and `AppConstants.sfHotelId` are **getters** that proxy through `AppSession._activePropertyId / _activeSfHotelId` (mutable statics). Call `AppSession.setActiveProperty(PropertyInfo)` to update — all 28+ repository call-sites that use `AppConstants.propertyId` update transparently with no further changes.
+
+### Supabase schema for auth
+
+```
+pins (id, pin TEXT, role TEXT CHECK('owner'|'staff'), is_active BOOL)
+properties (id, name TEXT, sf_hotel_id TEXT, is_active BOOL)
+pin_properties (pin_id FK, property_id FK, sort_order INT)  -- many-to-many
+```
 
 ---
 
@@ -104,8 +125,8 @@ The PIN screen is always rendered in dark theme regardless of system setting.
 
 | Cubit | Scope | Notes |
 |---|---|---|
-| `AuthCubit` | App-level | PIN, role, session |
-| `ConfigCubit` | App-level | Rooms + types + sources + destinations. Loaded once post-auth. **Must be provided at app root.** |
+| `AuthCubit` | App-level | PIN verification, role, property list + active property, session |
+| `ConfigCubit` | App-level | Rooms + types + sources + destinations for the **active property**. Loaded/reloaded on every `AuthAuthenticated` emission. **Must be provided at app root.** |
 | `BookingCubit` | Feature | Save/edit/conflict check |
 | `DailyCubit` | Feature | Daily room status + fetch group by day |
 | `MonthlyCubit` | Feature | Month bookings + heatmap stats |
@@ -117,6 +138,10 @@ Rules:
 - All state classes extend `Equatable` and override `props`
 - `ConfigCubit` is the single source of truth for rooms/types/sources/destinations during a session
 
+### Property switch flow
+
+`AuthCubit.switchProperty()` → re-emits `AuthAuthenticated` → `app.dart` listener calls `ConfigCubit.loadConfig()` → `HomeScreen`'s `BlocListener<ConfigCubit>` detects `ConfigLoaded` and calls `HomeCubit.refresh()` (skipped on initial load when `HomeCubit` is still `HomeInitial`).
+
 ---
 
 ## Navigation
@@ -126,13 +151,16 @@ Routes live in `lib/app.dart`. GoRouter uses a `_GoRouterRefreshStream` wrapping
 ```dart
 // Route guard
 redirect: (context, state) {
-  if (auth is! AuthAuthenticated) return '/pin';
+  if (auth is! AuthAuthenticated) return onPin ? null : '/pin';
+  if (onPin) return '/home';
   if (state.matchedLocation.startsWith('/settings')) {
-    if (auth.role != UserRole.owner) return '/daily';
+    if (auth.role != UserRole.owner) return '/home';
   }
   return null;
 }
 ```
+
+`AuthLoading` is not `AuthAuthenticated`, so users stay on `/pin` during Supabase verification.
 
 Routes: `/pin`, `/home`, `/daily`, `/monthly`, `/reports`, `/reports/payment`, `/booking/new`, `/payment/update`, `/settings`, `/settings/rooms`, `/settings/booking-types`, `/settings/booking-sources`, `/settings/payment-destinations`.
 
@@ -209,6 +237,11 @@ PATCH /booking_groups?id=eq.<id>&property_id=eq.<pid>
 GET /booking_days?property_id=eq.<id>&booking_date=gte.<start>&booking_date=lte.<end>&is_active=eq.true
   &select=amount,room_id,rooms(name),booking_groups!inner(payment_destination_id,payment_destinations(*))
   &booking_groups.is_active=eq.true
+
+# PIN verification (auth):
+GET /pins?pin=eq.<pin>&is_active=eq.true
+  &select=role,pin_properties(sort_order,properties(id,name,sf_hotel_id))
+  (single row — .maybeSingle())
 ```
 
 Reports aggregation happens **client-side** in `ReportsRepository` — raw rows are grouped by room → destination into `RoomPaymentSummary` objects. Null `payment_destination_id` is displayed as "Not specified".
