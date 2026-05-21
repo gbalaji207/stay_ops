@@ -28,6 +28,7 @@ class PinScreen extends StatefulWidget {
 class _PinScreenState extends State<PinScreen> with TickerProviderStateMixin {
   String _pin = '';
   bool _isError = false;
+  bool _isVerifying = false;
   String _appVersion = '';
   Timer? _clearTimer;
 
@@ -61,7 +62,7 @@ class _PinScreenState extends State<PinScreen> with TickerProviderStateMixin {
   }
 
   void _onDigit(String digit) {
-    if (_isError || _pin.length >= 4) return;
+    if (_isError || _isVerifying || _pin.length >= 4) return;
     setState(() => _pin += digit);
     if (_pin.length == 4) {
       context.read<AuthCubit>().verifyPin(_pin);
@@ -69,7 +70,7 @@ class _PinScreenState extends State<PinScreen> with TickerProviderStateMixin {
   }
 
   void _onBackspace() {
-    if (_isError || _pin.isEmpty) return;
+    if (_isError || _isVerifying || _pin.isEmpty) return;
     setState(() => _pin = _pin.substring(0, _pin.length - 1));
   }
 
@@ -77,10 +78,13 @@ class _PinScreenState extends State<PinScreen> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     return BlocListener<AuthCubit, AuthState>(
       listener: (context, state) {
-        if (state is AuthAuthenticated) {
+        if (state is AuthLoading) {
+          setState(() => _isVerifying = true);
+        } else if (state is AuthAuthenticated) {
           context.go('/home');
         } else if (state is AuthError) {
           setState(() {
+            _isVerifying = false;
             _isError = true;
             _pin = '';
           });
@@ -151,11 +155,23 @@ class _PinScreenState extends State<PinScreen> with TickerProviderStateMixin {
               const SizedBox(height: 12),
               SizedBox(
                 height: 20,
-                child: Text(
-                  _isError ? 'Incorrect PIN. Try again.' : '',
-                  style: const TextStyle(fontSize: 12, color: _kErrorColor),
-                  textAlign: TextAlign.center,
-                ),
+                child: _isVerifying
+                    ? const Center(
+                        child: SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: _kDotFilled,
+                          ),
+                        ),
+                      )
+                    : Text(
+                        _isError ? 'Incorrect PIN. Try again.' : '',
+                        style: const TextStyle(
+                            fontSize: 12, color: _kErrorColor),
+                        textAlign: TextAlign.center,
+                      ),
               ),
               const SizedBox(height: 8),
               Text(

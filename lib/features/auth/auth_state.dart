@@ -11,13 +11,35 @@ class AuthInitial extends AuthState {
   List<Object?> get props => [];
 }
 
-class AuthAuthenticated extends AuthState {
-  const AuthAuthenticated(this.role);
-
-  final UserRole role;
+class AuthLoading extends AuthState {
+  const AuthLoading();
 
   @override
-  List<Object?> get props => [role];
+  List<Object?> get props => [];
+}
+
+class AuthAuthenticated extends AuthState {
+  const AuthAuthenticated({
+    required this.role,
+    required this.properties,
+    required this.activePropertyId,
+  });
+
+  final UserRole role;
+  final List<PropertyInfo> properties;
+  final String activePropertyId;
+
+  PropertyInfo get activeProperty =>
+      properties.firstWhere((p) => p.id == activePropertyId);
+
+  AuthAuthenticated copyWithActiveProperty(String id) => AuthAuthenticated(
+        role: role,
+        properties: properties,
+        activePropertyId: id,
+      );
+
+  @override
+  List<Object?> get props => [role, properties, activePropertyId];
 }
 
 class AuthError extends AuthState {

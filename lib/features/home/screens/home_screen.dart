@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/models/booking_group.dart';
 import '../../../shared/models/payment_destination.dart';
+import '../../auth/auth_cubit.dart';
 import '../../booking/booking_repository.dart';
 import '../../booking/widgets/stay_flexi_search_dialog.dart';
 import '../../booking/wizard/booking_wizard_extras.dart';
@@ -112,7 +113,18 @@ class _HomeScreenState extends State<HomeScreen> {
         });
         return cubit;
       },
-      child: BlocBuilder<HomeCubit, HomeState>(
+      child: BlocListener<ConfigCubit, ConfigState>(
+        // Fires when config (re)loads — covers property switch + retry.
+        // Skip the initial load: HomeCubit starts as HomeInitial and the
+        // addPostFrameCallback above handles that first fetch.
+        listenWhen: (_, curr) => curr is ConfigLoaded,
+        listener: (context, _) {
+          final cubit = context.read<HomeCubit>();
+          if (cubit.state is! HomeInitial) {
+            cubit.refresh(_today, _totalRooms());
+          }
+        },
+        child: BlocBuilder<HomeCubit, HomeState>(
         builder: (context, state) {
           if (state is HomeInitial || state is HomeLoading) {
             return const Scaffold(
@@ -127,6 +139,7 @@ class _HomeScreenState extends State<HomeScreen> {
           }
           return const Scaffold(body: SizedBox.shrink());
         },
+        ),
       ),
     );
   }
@@ -186,7 +199,7 @@ class _HomeScreenState extends State<HomeScreen> {
             slivers: [
               // Header
               SliverToBoxAdapter(
-                child: _buildHeader(colors),
+                child: _buildHeader(context, colors),
               ),
 
               // Section 1 — Occupancy
@@ -329,53 +342,138 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildHeader(AppColors colors) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _greeting(),
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                    color: colors.textPrimary,
-                  ),
+  Widget _buildHeader(BuildContext context, AppColors colors) {
+    return BlocBuilder<AuthCubit, AuthState>(
+      builder: (_, authState) {
+        final auth =
+            authState is AuthAuthenticated ? authState : null;
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _greeting(),
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        color: colors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      DateFormat('EEEE, d MMMM yyyy').format(_today),
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: colors.textSecondary,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  DateFormat('EEEE, d MMMM yyyy').format(_today),
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: colors.textSecondary,
+              ),
+              if (auth != null) ...[
+                const SizedBox(width: 12),
+                GestureDetector(
+                  onTap: auth.properties.length > 1
+                      ? () => _showPropertySwitcher(context, auth)
+                      : null,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: colors.accentSubtle,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          auth.activeProperty.name,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: colors.accent,
+                          ),
+                        ),
+                        if (auth.properties.length > 1) ...[
+                          const SizedBox(width: 4),
+                          Icon(
+                            Icons.swap_horiz_rounded,
+                            size: 13,
+                            color: colors.accent,
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
                 ),
               ],
-            ),
+            ],
           ),
-          const SizedBox(width: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: colors.accentSubtle,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              'StayOps',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: colors.accent,
-              ),
-            ),
-          ),
-        ],
+        );
+      },
+    );
+  }
+
+  void _showPropertySwitcher(
+      BuildContext context, AuthAuthenticated auth) {
+    final colors = Theme.of(context).extension<AppColors>()!;
+    showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
+      builder: (_) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+                child: Text(
+                  'Switch Property',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: colors.textPrimary,
+                  ),
+                ),
+              ),
+              ...auth.properties.map(
+                (p) => ListTile(
+                  title: Text(
+                    p.name,
+                    style: TextStyle(
+                      fontWeight: p.id == auth.activePropertyId
+                          ? FontWeight.w600
+                          : FontWeight.normal,
+                      color: p.id == auth.activePropertyId
+                          ? colors.accent
+                          : colors.textPrimary,
+                    ),
+                  ),
+                  trailing: p.id == auth.activePropertyId
+                      ? Icon(Icons.check_rounded,
+                          color: colors.accent, size: 18)
+                      : null,
+                  onTap: () {
+                    Navigator.pop(context);
+                    if (p.id != auth.activePropertyId) {
+                      context.read<AuthCubit>().switchProperty(p.id);
+                    }
+                  },
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
     );
   }
 

@@ -1,8 +1,18 @@
+import '../shared/models/property_info.dart';
+
 enum UserRole { none, staff, owner }
 
 class AppConstants {
-  static const String propertyId = 'bae7686a-8454-49e4-92b4-b36d42ec4ad8';
-  static const String sfHotelId = '32459';
-  static const String ownerPin = '6857';
-  static const String staffPin = '1796';
+  static String get propertyId => AppSession._activePropertyId;
+  static String get sfHotelId => AppSession._activeSfHotelId;
+}
+
+class AppSession {
+  static String _activePropertyId = '';
+  static String _activeSfHotelId = '';
+
+  static void setActiveProperty(PropertyInfo property) {
+    _activePropertyId = property.id;
+    _activeSfHotelId = property.sfHotelId ?? '';
+  }
 }
