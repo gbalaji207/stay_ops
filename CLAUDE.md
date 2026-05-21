@@ -50,8 +50,9 @@ lib/
 │   ├── home/
 │   │   ├── cubit/        # home_cubit, home_state
 │   │   ├── repository/   # home_repository
-│   │   ├── screens/      # home_screen
-│   │   └── widgets/      # booking_card, occupancy_strip, upcoming_card, new_booking_row
+│   │   ├── screens/      # home_screen, payment_update_screen
+│   │   ├── widgets/      # booking_card, occupancy_strip, upcoming_card, new_booking_row
+│   │   └── payment_update_extras.dart   # route carrier for /payment/update
 │   ├── monthly/      # monthly_screen, monthly_cubit, monthly_repository, month_booking_row, day_stats
 │   ├── reports/      # reports_screen, payment_report_screen, reports_cubit, reports_repository
 │   └── settings/     # owner only — rooms, booking_types, booking_sources, payment_destinations
@@ -133,7 +134,9 @@ redirect: (context, state) {
 }
 ```
 
-Routes: `/pin`, `/home`, `/daily`, `/monthly`, `/reports`, `/reports/payment`, `/settings`, `/settings/rooms`, `/settings/booking-types`, `/settings/booking-sources`, `/settings/payment-destinations`.
+Routes: `/pin`, `/home`, `/daily`, `/monthly`, `/reports`, `/reports/payment`, `/booking/new`, `/payment/update`, `/settings`, `/settings/rooms`, `/settings/booking-types`, `/settings/booking-sources`, `/settings/payment-destinations`.
+
+`/booking/new` and `/payment/update` are top-level routes outside the `ShellRoute` (no bottom nav bar). Both return `bool` via `context.pop(true)` on save so the caller can refresh.
 
 Settings tab (and Reports tab for staff) are **fully absent from the widget tree** for staff — not hidden, not greyed out. Bottom nav has 5 items for owner, 4 for staff.
 
@@ -145,7 +148,8 @@ These are non-obvious and critical to get right:
 
 - **Night count:** `check_out − check_in`. `check_out` is the departure day (exclusive). Single night: `check_in=May 13, check_out=May 14`.
 - **Amount split:** `total_amount / nights` — decimal, no rounding redistribution. `NUMERIC(10,2)` handles precision. `total_amount` on `booking_groups` is the source of truth.
-- **Payment status:** Boolean on `booking_groups` only — not per night.
+- **`netAmount` (computed, not stored):** `totalAmount − (commissionInclTax ?? 0) − (taxDeduction ?? 0)`. Available as a getter on both `BookingGroup` and `BookingGroupInput`. Never stored in DB.
+- **Payment status:** Boolean (`payment_received`) on `booking_groups` only — not per night. Extended by three nullable payment columns: `actual_payment_amount NUMERIC(10,2)`, `payment_received_date DATE`, `payment_notes TEXT`.
 - **Edit always opens full group:** Tapping any night (daily card or monthly row) fetches and opens the entire `booking_group`.
 - **Soft-delete only:** Never hard-delete. Set `is_active = false`.
 - **Range shrink on edit:** Removed nights → `is_active=false` on their `booking_days` rows. Remaining rows get recalculated amount.
@@ -195,6 +199,11 @@ WHERE booking_days.room_id = :roomId AND booking_days.booking_date = :date AND b
 PATCH /booking_groups?id=eq.<id>          -- update metadata
 PATCH /booking_days (removed nights)      -- is_active=false
 PATCH /booking_days (remaining nights)    -- recalculated amount
+
+# Payment-only update (does NOT touch booking_days):
+PATCH /booking_groups?id=eq.<id>&property_id=eq.<pid>
+  -- payment_received, actual_payment_amount, payment_destination_id,
+  -- payment_received_date, payment_notes, updated_at
 
 # Reports: joins booking_days → booking_groups → payment_destinations, aggregated client-side
 GET /booking_days?property_id=eq.<id>&booking_date=gte.<start>&booking_date=lte.<end>&is_active=eq.true
@@ -269,6 +278,27 @@ SF JSON → wizard field mapping:
 - `internal_room_id` → room, `checkin`/`checkout` → stay dates (date part only), `booking_made_on` → booking date
 - `ota_gross_amount` → gross, `ota_tax_amount` → tax, `ota_commission` → commission, `tax_deduction` → TDS/TCS
 - `customer_name`, `sfBookingId`, `ota_booking_id` → respective text fields
+
+---
+
+## Payment Update Workflow
+
+Tapping a card in the "Payment Pending" section of the Home screen opens `/payment/update` (not the booking wizard). The route carrier is `PaymentUpdateExtras` (carries `BookingGroup` + `List<PaymentDestination>`).
+
+`PaymentUpdateScreen` is a lightweight stateful screen — **no cubit**, direct `BookingRepository.updatePaymentDetails()` call. It PATCHes only payment fields on `booking_groups`; `booking_days` are never touched.
+
+Fields captured:
+| Field | Pre-fill source |
+|---|---|
+| Amount received | `group.netAmount` (computed) |
+| Payment destination | `group.paymentDestinationId` (guarded against active list) |
+| Payment received date | Today; `lastDate: DateTime.now()` |
+| Payment notes | `group.paymentNotes` |
+| Mark as received (Switch) | Defaults `true` (launched from pending list) |
+
+The read-only reference card at the top (surface/border container) shows — in order — OTA ID (with clipboard copy), dates, source · type, customer name. Fields absent from the booking are silently omitted. Type and source names are resolved from `ConfigCubit` state via `context.read<ConfigCubit>()` in `build()`.
+
+`BookingRepository.updatePaymentDetails()` is a separate method that only PATCHes the five payment columns + `updated_at`. Do **not** route payment-only updates through `updateBookingGroup()`.
 
 ---
 

@@ -198,6 +198,26 @@ class BookingRepository {
     return (rows as List).isNotEmpty;
   }
 
+  Future<void> updatePaymentDetails({
+    required String groupId,
+    required bool paymentReceived,
+    required double? actualPaymentAmount,
+    required String? paymentDestinationId,
+    required DateTime? paymentReceivedDate,
+    required String? paymentNotes,
+  }) async {
+    final notes = paymentNotes?.trim();
+    await _client.from('booking_groups').update({
+      'payment_received': paymentReceived,
+      'actual_payment_amount': actualPaymentAmount,
+      'payment_destination_id': paymentDestinationId,
+      'payment_received_date':
+          paymentReceivedDate != null ? _fmt(paymentReceivedDate) : null,
+      'payment_notes': (notes?.isEmpty ?? true) ? null : notes,
+      'updated_at': DateTime.now().toIso8601String(),
+    }).eq('id', groupId).eq('property_id', AppConstants.propertyId);
+  }
+
   Future<BookingGroup> fetchGroupById(String groupId) async {
     final row = await _client
         .from('booking_groups')

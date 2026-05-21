@@ -24,6 +24,8 @@ import 'features/settings/settings_screen.dart';
 import 'features/auth/pin_screen.dart';
 import 'features/booking/wizard/booking_wizard_extras.dart';
 import 'features/booking/wizard/booking_wizard_screen.dart';
+import 'features/home/payment_update_extras.dart';
+import 'features/home/screens/payment_update_screen.dart';
 
 // Adapts a Cubit/Bloc stream to the Listenable interface required by GoRouter.
 class _GoRouterRefreshStream extends ChangeNotifier {
@@ -68,6 +70,13 @@ GoRouter _buildRouter(AuthCubit authCubit) {
           final extras = state.extra as BookingWizardExtras?;
           return BookingWizardScreen(
               extras: extras ?? const BookingWizardExtras());
+        },
+      ),
+      GoRoute(
+        path: '/payment/update',
+        builder: (context, state) {
+          final extras = state.extra as PaymentUpdateExtras;
+          return PaymentUpdateScreen(extras: extras);
         },
       ),
       ShellRoute(

@@ -22,6 +22,9 @@ class BookingGroup extends Equatable {
     this.taxAmount,
     this.commissionInclTax,
     this.taxDeduction,
+    this.actualPaymentAmount,
+    this.paymentReceivedDate,
+    this.paymentNotes,
   });
 
   final String id;
@@ -44,9 +47,14 @@ class BookingGroup extends Equatable {
   final double? taxAmount;
   final double? commissionInclTax;
   final double? taxDeduction;
+  final double? actualPaymentAmount;
+  final DateTime? paymentReceivedDate;
+  final String? paymentNotes;
 
   int get nights => checkOut.difference(checkIn).inDays;
   double get perNightAmount => nights > 0 ? totalAmount / nights : 0;
+  double get netAmount =>
+      totalAmount - (commissionInclTax ?? 0) - (taxDeduction ?? 0);
 
   factory BookingGroup.fromJson(Map<String, dynamic> json) {
     final destMap = json['payment_destinations'] as Map<String, dynamic>?;
@@ -73,6 +81,12 @@ class BookingGroup extends Equatable {
       taxAmount: (json['tax_amount'] as num?)?.toDouble(),
       commissionInclTax: (json['commission_incl_tax'] as num?)?.toDouble(),
       taxDeduction: (json['tax_deduction'] as num?)?.toDouble(),
+      actualPaymentAmount:
+          (json['actual_payment_amount'] as num?)?.toDouble(),
+      paymentReceivedDate: json['payment_received_date'] != null
+          ? DateTime.parse(json['payment_received_date'] as String)
+          : null,
+      paymentNotes: json['payment_notes'] as String?,
     );
   }
 
@@ -98,5 +112,8 @@ class BookingGroup extends Equatable {
         taxAmount,
         commissionInclTax,
         taxDeduction,
+        actualPaymentAmount,
+        paymentReceivedDate,
+        paymentNotes,
       ];
 }

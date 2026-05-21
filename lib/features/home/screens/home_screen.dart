@@ -6,12 +6,14 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/models/booking_group.dart';
+import '../../../shared/models/payment_destination.dart';
 import '../../booking/booking_repository.dart';
 import '../../booking/widgets/stay_flexi_search_dialog.dart';
 import '../../booking/wizard/booking_wizard_extras.dart';
 import '../../booking/wizard/sf_booking_prefill.dart';
 import '../../config/config_cubit.dart';
 import '../cubit/home_cubit.dart';
+import '../payment_update_extras.dart';
 import '../repository/home_repository.dart';
 import '../widgets/booking_card.dart';
 import '../widgets/new_booking_row.dart';
@@ -70,6 +72,26 @@ class _HomeScreenState extends State<HomeScreen> {
       messenger.showSnackBar(
         SnackBar(content: Text('Could not load booking: $e')),
       );
+    }
+  }
+
+  Future<void> _tapPaymentCard(
+      BuildContext context, BookingGroup group) async {
+    final cubit = context.read<HomeCubit>();
+    final configState = context.read<ConfigCubit>().state;
+    final activeDestinations = configState is ConfigLoaded
+        ? configState.paymentDestinations
+            .where((d) => d.isActive)
+            .toList()
+            .cast<PaymentDestination>()
+        : <PaymentDestination>[];
+    final saved = await context.push<bool>(
+      '/payment/update',
+      extra: PaymentUpdateExtras(
+          group: group, activeDestinations: activeDestinations),
+    );
+    if ((saved ?? false) && context.mounted) {
+      cubit.refresh(_today, _totalRooms());
     }
   }
 
@@ -293,6 +315,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 sourceName: sourceName,
                 colors: colors,
                 emptyText: 'All payments received',
+                cardTapOverride: _tapPaymentCard,
               ),
 
               // Bottom padding so FAB doesn't cover last card
@@ -418,6 +441,7 @@ class _HomeScreenState extends State<HomeScreen> {
     required String? Function(String?) sourceName,
     required AppColors colors,
     required String emptyText,
+    Future<void> Function(BuildContext, BookingGroup)? cardTapOverride,
   }) {
     if (groups.isEmpty) return _emptySliver(colors, emptyText);
     return SliverList(
@@ -430,7 +454,9 @@ class _HomeScreenState extends State<HomeScreen> {
               group: g,
               roomName: roomName(g.roomId),
               sourceName: sourceName(g.bookingSourceId),
-              onTap: () => _tapCard(context, g.id),
+              onTap: cardTapOverride != null
+                  ? () => cardTapOverride(context, g)
+                  : () => _tapCard(context, g.id),
             ),
           );
         },
