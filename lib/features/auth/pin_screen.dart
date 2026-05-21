@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import 'auth_cubit.dart';
 
@@ -27,6 +28,7 @@ class PinScreen extends StatefulWidget {
 class _PinScreenState extends State<PinScreen> with TickerProviderStateMixin {
   String _pin = '';
   bool _isError = false;
+  String _appVersion = '';
   Timer? _clearTimer;
 
   late final AnimationController _shakeController;
@@ -35,6 +37,9 @@ class _PinScreenState extends State<PinScreen> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    PackageInfo.fromPlatform().then((info) {
+      if (mounted) setState(() => _appVersion = 'v${info.version} (${info.buildNumber})');
+    });
     _shakeController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 400),
@@ -153,9 +158,9 @@ class _PinScreenState extends State<PinScreen> with TickerProviderStateMixin {
                 ),
               ),
               const SizedBox(height: 8),
-              const Text(
-                'Owner PIN · Staff PIN',
-                style: TextStyle(fontSize: 11, color: _kRoleHintColor),
+              Text(
+                _appVersion,
+                style: const TextStyle(fontSize: 11, color: _kRoleHintColor),
               ),
               const SizedBox(height: 24),
             ],
