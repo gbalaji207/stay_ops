@@ -76,6 +76,33 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _showOtaPaymentDialog(BuildContext context) async {
+    final cubit = context.read<HomeCubit>();
+    final configState = context.read<ConfigCubit>().state;
+    final activeDestinations = configState is ConfigLoaded
+        ? configState.paymentDestinations
+            .where((d) => d.isActive)
+            .toList()
+            .cast<PaymentDestination>()
+        : <PaymentDestination>[];
+
+    final group = await showDialog<BookingGroup>(
+      context: context,
+      builder: (_) => _OtaSearchDialog(activeDestinations: activeDestinations),
+    );
+
+    if (group != null && context.mounted) {
+      final saved = await context.push<bool>(
+        '/payment/update',
+        extra: PaymentUpdateExtras(
+            group: group, activeDestinations: activeDestinations),
+      );
+      if ((saved ?? false) && context.mounted) {
+        cubit.refresh(_today, _totalRooms());
+      }
+    }
+  }
+
   Future<void> _tapPaymentCard(
       BuildContext context, BookingGroup group) async {
     final cubit = context.read<HomeCubit>();
@@ -666,19 +693,161 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
         ),
-        // Main FAB
-        FloatingActionButton(
-          heroTag: 'home_fab',
-          backgroundColor: colors.accent,
-          foregroundColor: Colors.white,
-          elevation: 4,
-          onPressed: () => setState(() => _fabExpanded = !_fabExpanded),
-          child: AnimatedRotation(
-            turns: _fabExpanded ? 0.125 : 0,
-            duration: const Duration(milliseconds: 200),
-            child: const Icon(Icons.add, size: 24),
-          ),
+        // FAB row: OTA payment search + main add FAB
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Tooltip(
+              message: 'Find by OTA ID',
+              child: FloatingActionButton.small(
+                heroTag: 'ota_payment_fab',
+                backgroundColor: colors.surface,
+                foregroundColor: colors.accent,
+                elevation: 2,
+                onPressed: () async {
+                  if (_fabExpanded) setState(() => _fabExpanded = false);
+                  if (!context.mounted) return;
+                  await _showOtaPaymentDialog(context);
+                },
+                child: const Icon(Icons.manage_search_rounded, size: 20),
+              ),
+            ),
+            const SizedBox(width: 12),
+            FloatingActionButton(
+              heroTag: 'home_fab',
+              backgroundColor: colors.accent,
+              foregroundColor: Colors.white,
+              elevation: 4,
+              onPressed: () => setState(() => _fabExpanded = !_fabExpanded),
+              child: AnimatedRotation(
+                turns: _fabExpanded ? 0.125 : 0,
+                duration: const Duration(milliseconds: 200),
+                child: const Icon(Icons.add, size: 24),
+              ),
+            ),
+          ],
         ),
+      ],
+    );
+  }
+}
+
+class _OtaSearchDialog extends StatefulWidget {
+  const _OtaSearchDialog({required this.activeDestinations});
+
+  final List<PaymentDestination> activeDestinations;
+
+  @override
+  State<_OtaSearchDialog> createState() => _OtaSearchDialogState();
+}
+
+class _OtaSearchDialogState extends State<_OtaSearchDialog> {
+  final _controller = TextEditingController();
+  String? _errorText;
+  bool _loading = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _search() async {
+    final otaId = _controller.text.trim();
+    if (otaId.isEmpty) {
+      setState(() => _errorText = 'Enter an OTA Booking ID');
+      return;
+    }
+    setState(() {
+      _loading = true;
+      _errorText = null;
+    });
+    try {
+      final group = await BookingRepository().fetchGroupByOtaId(otaId);
+      if (!mounted) return;
+      if (group == null) {
+        setState(() {
+          _loading = false;
+          _errorText = 'No booking found with this OTA ID';
+        });
+        return;
+      }
+      Navigator.of(context).pop(group);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _errorText = 'Error: $e';
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<AppColors>()!;
+    return AlertDialog(
+      backgroundColor: colors.surface,
+      title: Text(
+        'Update Payment Status',
+        style: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+          color: colors.textPrimary,
+        ),
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Enter OTA Booking ID to find and update the payment status.',
+            style: TextStyle(fontSize: 13, color: colors.textSecondary),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _controller,
+            autofocus: true,
+            textInputAction: TextInputAction.search,
+            onSubmitted: (_) => _search(),
+            style: TextStyle(color: colors.textPrimary),
+            decoration: InputDecoration(
+              hintText: 'Enter OTA booking ID',
+              hintStyle: TextStyle(color: colors.textHint),
+              enabledBorder: UnderlineInputBorder(
+                borderSide: BorderSide(color: colors.border),
+              ),
+              focusedBorder: UnderlineInputBorder(
+                borderSide: BorderSide(color: colors.accent),
+              ),
+            ),
+          ),
+          if (_errorText != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              _errorText!,
+              style: TextStyle(fontSize: 12, color: colors.danger),
+            ),
+          ],
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(null),
+          child: Text('Cancel', style: TextStyle(color: colors.textSecondary)),
+        ),
+        if (_loading)
+          const SizedBox(
+            height: 20,
+            width: 20,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          )
+        else
+          TextButton(
+            onPressed: _search,
+            child: Text('Search', style: TextStyle(color: colors.accent)),
+          ),
       ],
     );
   }

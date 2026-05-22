@@ -3,8 +3,10 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../../shared/models/payment_destination.dart';
 import '../../../shared/widgets/conflict_dialog.dart';
 import '../../config/config_cubit.dart';
+import '../../home/payment_update_extras.dart';
 import '../booking_cubit.dart';
 import '../booking_group_input.dart';
 import '../booking_repository.dart';
@@ -193,6 +195,25 @@ class _BookingWizardScreenState extends State<BookingWizardScreen> {
     final t = text.trim();
     if (t.isEmpty) return null;
     return double.tryParse(t.replaceAll(',', ''));
+  }
+
+  Future<void> _openPaymentUpdate(BuildContext context) async {
+    final group = widget.extras.existingGroup!;
+    final configState = context.read<ConfigCubit>().state;
+    final activeDestinations = configState is ConfigLoaded
+        ? configState.paymentDestinations
+            .where((d) => d.isActive)
+            .toList()
+            .cast<PaymentDestination>()
+        : <PaymentDestination>[];
+    if (!context.mounted) return;
+    final saved = await context.push<bool>(
+      '/payment/update',
+      extra: PaymentUpdateExtras(group: group, activeDestinations: activeDestinations),
+    );
+    if ((saved ?? false) && context.mounted) {
+      context.pop(true);
+    }
   }
 
   void _handleSave() {
@@ -388,6 +409,11 @@ class _BookingWizardScreenState extends State<BookingWizardScreen> {
                   onSave: _handleSave,
                   isBusy: isBusy,
                   isEditMode: widget.extras.existingGroup != null,
+                  onUpdatePayment: widget.extras.existingGroup != null
+                      ? () => _openPaymentUpdate(context)
+                      : null,
+                  paymentAlreadyReceived:
+                      widget.extras.existingGroup?.paymentReceived ?? false,
                 ),
               ],
             ),

@@ -245,6 +245,9 @@ GET /booking_days?...&select=amount,room_id,rooms(name),booking_groups!inner(boo
 # Source report: booking_days → booking_groups → booking_sources
 GET /booking_days?...&select=amount,room_id,rooms(name),booking_groups!inner(booking_source_id,is_active,booking_sources(name))
 
+# Fetch group by OTA booking ID (for payment update search FAB):
+GET /booking_groups?ota_booking_id=eq.<id>&property_id=eq.<pid>&is_active=eq.true&limit=1
+
 # PIN verification (auth):
 GET /pins?pin=eq.<pin>&is_active=eq.true
   &select=role,pin_properties(sort_order,properties(id,name,sf_hotel_id))
@@ -301,12 +304,15 @@ Steps: 1 = Room (`wizard_step1_room.dart`), 2 = Dates + Guest + Type/Source (`wi
 - Booking source dropdown: filtered by selected type. **Hidden entirely** if selected type has no active sources.
 - Payment destination: auto-filled from source's `defaultPaymentDestinationId` when source is changed; always shown.
 - Back navigation: edit/SF prefill mode exits on back from step 4 (doesn't step back through wizard).
+- **Edit mode only — payment shortcut:** Step 4's "Net amount" row includes a `TextButton` on the right edge. Label is **"Update Receival"** when `paymentReceived == false`, **"Payment Status"** when already received. Tapping pushes `/payment/update`; if payment is saved the wizard pops with `true`. Wired via `onUpdatePayment: VoidCallback?` + `paymentAlreadyReceived: bool` params on `WizardStep4Review` — both are `null`/`false` for new bookings.
 
 ---
 
 ## Stay Flexi Integration
 
-Home screen FAB is expandable — **Manual** launches the plain wizard, **Stay Flexi ID** opens `showStayFlexiSearchDialog`.
+Home screen has **two FABs** that always sit side-by-side at the bottom-right:
+- **Search FAB** (small, `colors.surface` bg, `Icons.manage_search_rounded`): opens `_OtaSearchDialog` — user enters an OTA Booking ID, `BookingRepository.fetchGroupByOtaId()` searches `booking_groups.ota_booking_id`, then pushes `/payment/update` on match. The dialog is a `StatefulWidget` that owns its `TextEditingController`; do **not** use `StatefulBuilder` here as it has no `dispose()`.
+- **Add FAB** (standard, accent bg): expandable — **Manual** launches the plain wizard, **Stay Flexi ID** opens `showStayFlexiSearchDialog`.
 
 Dialog flow:
 1. Check `booking_groups` for existing active record with same `stay_flexi_booking_id` → show error if found (`BookingRepository.stayFlexiBookingExists`)
@@ -323,7 +329,12 @@ SF JSON → wizard field mapping:
 
 ## Payment Update Workflow
 
-Tapping a card in the "Payment Pending" section of the Home screen opens `/payment/update` (not the booking wizard). The route carrier is `PaymentUpdateExtras` (carries `BookingGroup` + `List<PaymentDestination>`).
+`/payment/update` (not the booking wizard) is reached from three entry points:
+1. Tapping a card in the "Payment Pending" section of the Home screen.
+2. The **"Update Receival" / "Payment Status"** TextButton in step 4 of the Edit Booking wizard.
+3. The **OTA Booking ID search FAB** on the Home screen — finds any active booking by `ota_booking_id`.
+
+The route carrier is `PaymentUpdateExtras` (carries `BookingGroup` + `List<PaymentDestination>`).
 
 `PaymentUpdateScreen` is a lightweight stateful screen — **no cubit**, direct `BookingRepository.updatePaymentDetails()` call. It PATCHes only payment fields on `booking_groups`; `booking_days` are never touched.
 

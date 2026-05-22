@@ -229,6 +229,18 @@ class BookingRepository {
     return BookingGroup.fromJson(row);
   }
 
+  Future<BookingGroup?> fetchGroupByOtaId(String otaId) async {
+    final rows = await _client
+        .from('booking_groups')
+        .select('*')
+        .eq('ota_booking_id', otaId.trim())
+        .eq('property_id', AppConstants.propertyId)
+        .eq('is_active', true)
+        .limit(1);
+    if ((rows as List).isEmpty) return null;
+    return BookingGroup.fromJson(rows.first);
+  }
+
   String _fmt(DateTime date) =>
       '${date.year.toString().padLeft(4, '0')}-'
       '${date.month.toString().padLeft(2, '0')}-'

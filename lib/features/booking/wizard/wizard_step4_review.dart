@@ -38,6 +38,8 @@ class WizardStep4Review extends StatelessWidget {
     required this.onSave,
     required this.isBusy,
     required this.isEditMode,
+    this.onUpdatePayment,
+    this.paymentAlreadyReceived = false,
   });
 
   final List<Room> rooms;
@@ -65,6 +67,8 @@ class WizardStep4Review extends StatelessWidget {
   final VoidCallback onSave;
   final bool isBusy;
   final bool isEditMode;
+  final VoidCallback? onUpdatePayment;
+  final bool paymentAlreadyReceived;
 
   static final _amountFmt = NumberFormat('#,##0.##');
 
@@ -343,9 +347,11 @@ class WizardStep4Review extends StatelessWidget {
                 if (_grossAmount > 0) ...[
                   const SizedBox(height: 12),
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 10,
+                    padding: const EdgeInsets.only(
+                      left: 14,
+                      right: 4,
+                      top: 4,
+                      bottom: 4,
                     ),
                     decoration: BoxDecoration(
                       color: colors.successSubtle,
@@ -361,7 +367,7 @@ class WizardStep4Review extends StatelessWidget {
                             color: colors.success,
                           ),
                         ),
-                        const Spacer(),
+                        const SizedBox(width: 8),
                         Text(
                           '₹${_amountFmt.format(_netAmount)}',
                           style: TextStyle(
@@ -370,6 +376,25 @@ class WizardStep4Review extends StatelessWidget {
                             color: colors.success,
                           ),
                         ),
+                        const Spacer(),
+                        if (onUpdatePayment != null)
+                          TextButton(
+                            onPressed: onUpdatePayment,
+                            style: TextButton.styleFrom(
+                              foregroundColor: colors.success,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 8),
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              textStyle: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            child: Text(paymentAlreadyReceived
+                                ? 'Payment Status'
+                                : 'Update Receival'),
+                          ),
                       ],
                     ),
                   ),
