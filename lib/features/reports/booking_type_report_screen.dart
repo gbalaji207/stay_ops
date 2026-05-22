@@ -3,39 +3,38 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/theme/app_theme.dart';
-import '../../shared/models/room_payment_summary.dart';
+import '../../shared/models/room_category_summary.dart';
 import '../config/config_cubit.dart';
 import 'reports_cubit.dart';
 import 'reports_repository.dart';
 
-class PaymentReportScreen extends StatelessWidget {
-  const PaymentReportScreen({super.key});
+class BookingTypeReportScreen extends StatelessWidget {
+  const BookingTypeReportScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
       create: (_) => ReportsCubit(ReportsRepository()),
-      child: const _PaymentReportView(),
+      child: const _BookingTypeReportView(),
     );
   }
 }
 
-class _PaymentReportView extends StatefulWidget {
-  const _PaymentReportView();
+class _BookingTypeReportView extends StatefulWidget {
+  const _BookingTypeReportView();
 
   @override
-  State<_PaymentReportView> createState() => _PaymentReportViewState();
+  State<_BookingTypeReportView> createState() => _BookingTypeReportViewState();
 }
 
-class _PaymentReportViewState extends State<_PaymentReportView> {
+class _BookingTypeReportViewState extends State<_BookingTypeReportView> {
   late DateTime _dateFrom;
   late DateTime _dateTo;
-  // null = all rooms selected
   List<String>? _selectedRoomIds;
   String? _dateError;
 
   static final _dateFmt = DateFormat('d MMM yyyy');
-  static final _amountFmt = NumberFormat('#,##0.##');
+  static final _amountFmt = NumberFormat('#,##0');
 
   @override
   void initState() {
@@ -52,7 +51,7 @@ class _PaymentReportViewState extends State<_PaymentReportView> {
       return;
     }
     setState(() => _dateError = null);
-    context.read<ReportsCubit>().loadPaymentReport(
+    context.read<ReportsCubit>().loadBookingTypeReport(
           dateRange: DateTimeRange(start: _dateFrom, end: _dateTo),
           roomIds: _selectedRoomIds,
         );
@@ -90,7 +89,7 @@ class _PaymentReportViewState extends State<_PaymentReportView> {
         elevation: 0,
         leading: BackButton(color: colors.textPrimary),
         title: Text(
-          'Payment Report',
+          'Booking Type Report',
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w500,
@@ -100,7 +99,6 @@ class _PaymentReportViewState extends State<_PaymentReportView> {
       ),
       body: Column(
         children: [
-          // Filter bar
           Container(
             color: colors.surface,
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
@@ -136,8 +134,8 @@ class _PaymentReportViewState extends State<_PaymentReportView> {
                       selectedIds: _selectedRoomIds,
                       colors: colors,
                       onChanged: (ids) {
-                        setState(() => _selectedRoomIds =
-                            ids.isEmpty ? null : ids);
+                        setState(() =>
+                            _selectedRoomIds = ids.isEmpty ? null : ids);
                         _load();
                       },
                     ),
@@ -154,15 +152,14 @@ class _PaymentReportViewState extends State<_PaymentReportView> {
             ),
           ),
           Divider(height: 1, color: colors.border),
-          // Report body
           Expanded(
             child: BlocBuilder<ReportsCubit, ReportsState>(
               builder: (context, state) {
-                if (state is PaymentReportLoading ||
+                if (state is BookingTypeReportLoading ||
                     state is ReportsInitial) {
                   return _ShimmerSkeleton(colors: colors);
                 }
-                if (state is PaymentReportError) {
+                if (state is BookingTypeReportError) {
                   return Center(
                     child: Padding(
                       padding: const EdgeInsets.all(32),
@@ -177,7 +174,7 @@ class _PaymentReportViewState extends State<_PaymentReportView> {
                     ),
                   );
                 }
-                if (state is PaymentReportLoaded) {
+                if (state is BookingTypeReportLoaded) {
                   if (state.roomRows.isEmpty) {
                     return Center(
                       child: Text(
@@ -191,7 +188,7 @@ class _PaymentReportViewState extends State<_PaymentReportView> {
                       ),
                     );
                   }
-                  return _ReportBody(
+                  return _TableReportBody(
                     roomRows: state.roomRows,
                     overallTotals: state.overallTotals,
                     grandTotal: state.grandTotal,
@@ -416,8 +413,8 @@ class _RoomPickerSheetState extends State<_RoomPickerSheet> {
   }
 }
 
-class _ReportBody extends StatelessWidget {
-  const _ReportBody({
+class _TableReportBody extends StatelessWidget {
+  const _TableReportBody({
     required this.roomRows,
     required this.overallTotals,
     required this.grandTotal,
@@ -425,181 +422,154 @@ class _ReportBody extends StatelessWidget {
     required this.amountFmt,
   });
 
-  final List<RoomPaymentSummary> roomRows;
-  final List<DestinationTotal> overallTotals;
+  final List<RoomCategorySummary> roomRows;
+  final List<CategoryTotal> overallTotals;
   final double grandTotal;
   final AppColors colors;
   final NumberFormat amountFmt;
 
-  String _fmt(double amount) => '₹${amountFmt.format(amount)}';
+  static const double _roomColW = 110.0;
+  static const double _dataColW = 100.0;
+  static const double _rowH = 44.0;
+
+  String _fmt(double v) => '₹${amountFmt.format(v)}';
+  String _fmtOrDash(double? v) => (v == null || v == 0) ? '—' : _fmt(v);
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
+    final bdr = BorderSide(color: colors.border);
+    final amts = {
+      for (final r in roomRows)
+        r.roomId: {for (final c in r.byCategory) c.categoryId: c.amount},
+    };
+
+    return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
-      children: [
-        for (final room in roomRows)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Container(
-              decoration: BoxDecoration(
-                color: colors.surface,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: colors.border),
-              ),
-              child: Theme(
-                data: Theme.of(context).copyWith(
-                  dividerColor: Colors.transparent,
-                ),
-                child: ExpansionTile(
-                  tilePadding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  title: Text(
-                    room.roomName,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: colors.textPrimary,
-                    ),
-                  ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        _fmt(room.roomTotal),
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: colors.textPrimary,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      Icon(
-                        Icons.expand_more,
-                        color: colors.textSecondary,
-                      ),
-                    ],
-                  ),
+      child: Container(
+        clipBehavior: Clip.hardEdge,
+        decoration: BoxDecoration(
+          color: colors.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: colors.border),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Sticky Room column
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _lc('ROOM', bdr, isHeader: true),
+                for (final r in roomRows) _lc(r.roomName, bdr),
+                _lc('TOTAL', bdr, isFoot: true),
+              ],
+            ),
+            // Horizontally scrollable data columns
+            Expanded(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Divider(height: 1, color: colors.border),
-                    for (final dest in room.byDestination)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 10,
-                        ),
-                        child: Row(
-                          children: [
-                            Text(
-                              dest.destinationName ?? 'Not specified',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: dest.destinationName == null
-                                    ? colors.textHint
-                                    : colors.textPrimary,
-                              ),
-                            ),
-                            const Spacer(),
-                            Text(
-                              _fmt(dest.amount),
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: colors.textPrimary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                    Row(children: [
+                      for (final col in overallTotals)
+                        _dc(col.categoryName ?? 'Not specified', bdr,
+                            isHeader: true),
+                      _dc('TOTAL', bdr, isHeader: true, isTotalCol: true),
+                    ]),
+                    for (final r in roomRows)
+                      Row(children: [
+                        for (final col in overallTotals)
+                          _dc(_fmtOrDash(amts[r.roomId]?[col.categoryId]),
+                              bdr),
+                        _dc(_fmt(r.roomTotal), bdr,
+                            isBold: true, isTotalCol: true),
+                      ]),
+                    Row(children: [
+                      for (final col in overallTotals)
+                        _dc(_fmt(col.amount), bdr,
+                            isFoot: true, isBold: true),
+                      _dc(_fmt(grandTotal), bdr,
+                          isFoot: true, isTotalCol: true, isBold: true),
+                    ]),
                   ],
                 ),
               ),
             ),
-          ),
-        const SizedBox(height: 8),
-        // Overall summary card
-        Container(
-          decoration: BoxDecoration(
-            color: colors.surface,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: colors.border),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
-                child: Text(
-                  'OVERALL TOTAL',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.8,
-                    color: colors.textSecondary,
-                  ),
-                ),
-              ),
-              Divider(height: 1, color: colors.border),
-              for (final dest in overallTotals)
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 10,
-                  ),
-                  child: Row(
-                    children: [
-                      Text(
-                        dest.destinationName ?? 'Not specified',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: dest.destinationName == null
-                              ? colors.textHint
-                              : colors.textPrimary,
-                        ),
-                      ),
-                      const Spacer(),
-                      Text(
-                        _fmt(dest.amount),
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: colors.textPrimary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              Divider(height: 1, color: colors.border),
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 14,
-                ),
-                child: Row(
-                  children: [
-                    Text(
-                      'Grand Total',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: colors.textPrimary,
-                      ),
-                    ),
-                    const Spacer(),
-                    Text(
-                      _fmt(grandTotal),
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: colors.accent,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+          ],
         ),
-        const SizedBox(height: 24),
-      ],
+      ),
+    );
+  }
+
+  // Sticky label cell (Room column)
+  Widget _lc(
+    String text,
+    BorderSide bdr, {
+    bool isHeader = false,
+    bool isFoot = false,
+  }) {
+    return Container(
+      width: _roomColW,
+      height: _rowH,
+      decoration: BoxDecoration(
+        color: (isHeader || isFoot) ? colors.background : null,
+        border: Border(
+          bottom: isFoot ? BorderSide.none : bdr,
+          right: bdr,
+        ),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      alignment: Alignment.centerLeft,
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: (isHeader || isFoot) ? 11 : 13,
+          fontWeight: (isHeader || isFoot) ? FontWeight.w600 : FontWeight.w400,
+          color: isHeader ? colors.textSecondary : colors.textPrimary,
+          letterSpacing: (isHeader || isFoot) ? 0.6 : 0,
+        ),
+        overflow: TextOverflow.ellipsis,
+        maxLines: 1,
+      ),
+    );
+  }
+
+  // Data cell (category columns + total column)
+  Widget _dc(
+    String text,
+    BorderSide bdr, {
+    bool isHeader = false,
+    bool isFoot = false,
+    bool isTotalCol = false,
+    bool isBold = false,
+  }) {
+    final isAccent = isFoot && isTotalCol;
+    return Container(
+      width: _dataColW,
+      height: _rowH,
+      decoration: BoxDecoration(
+        color: (isHeader || isFoot || isTotalCol) ? colors.background : null,
+        border: Border(bottom: isFoot ? BorderSide.none : bdr),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      alignment: Alignment.centerRight,
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: isHeader ? 11 : 13,
+          fontWeight: (isHeader || isBold) ? FontWeight.w600 : FontWeight.w400,
+          color: isAccent
+              ? colors.accent
+              : isHeader
+                  ? colors.textSecondary
+                  : colors.textPrimary,
+          letterSpacing: isHeader ? 0.3 : 0,
+        ),
+        overflow: TextOverflow.ellipsis,
+        textAlign: TextAlign.right,
+        maxLines: 1,
+      ),
     );
   }
 }

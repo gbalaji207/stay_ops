@@ -56,12 +56,13 @@ lib/
 │   │   ├── widgets/      # booking_card, occupancy_strip, upcoming_card, new_booking_row
 │   │   └── payment_update_extras.dart   # route carrier for /payment/update
 │   ├── monthly/      # monthly_screen, monthly_cubit, monthly_repository, month_booking_row, day_stats
-│   ├── reports/      # reports_screen, payment_report_screen, reports_cubit, reports_repository
+│   ├── reports/      # reports_screen, payment_report_screen, booking_type_report_screen,
+│   │               # booking_source_report_screen, reports_cubit, reports_repository
 │   └── settings/     # owner only — rooms, booking_types, booking_sources, payment_destinations
 └── shared/
     ├── models/       # room, booking_type, booking_source, booking_group, booking_day,
-    │                 # payment_destination, room_payment_summary, occupancy_snapshot,
-    │                 # property_info
+    │                 # payment_destination, room_payment_summary, room_category_summary,
+    │                 # occupancy_snapshot, property_info
     └── widgets/      # conflict_dialog, app_text_field, app_dropdown_field,
                       # app_date_picker, app_date_range_picker
 ```
@@ -130,7 +131,7 @@ pin_properties (pin_id FK, property_id FK, sort_order INT)  -- many-to-many
 | `BookingCubit` | Feature | Save/edit/conflict check |
 | `DailyCubit` | Feature | Daily room status + fetch group by day |
 | `MonthlyCubit` | Feature | Month bookings + heatmap stats |
-| `ReportsCubit` | Feature | Payment report aggregation (client-side grouping) |
+| `ReportsCubit` | Feature | Payment, Type, and Source report aggregation (client-side grouping via shared `_aggregateCategory` helper) |
 | `SettingsCubit` | Feature | Config CRUD. After every write → call `ConfigCubit.reload()`. |
 
 Rules:
@@ -162,7 +163,7 @@ redirect: (context, state) {
 
 `AuthLoading` is not `AuthAuthenticated`, so users stay on `/pin` during Supabase verification.
 
-Routes: `/pin`, `/home`, `/daily`, `/monthly`, `/reports`, `/reports/payment`, `/booking/new`, `/payment/update`, `/settings`, `/settings/rooms`, `/settings/booking-types`, `/settings/booking-sources`, `/settings/payment-destinations`.
+Routes: `/pin`, `/home`, `/daily`, `/monthly`, `/reports`, `/reports/payment`, `/reports/booking-type`, `/reports/booking-source`, `/booking/new`, `/payment/update`, `/settings`, `/settings/rooms`, `/settings/booking-types`, `/settings/booking-sources`, `/settings/payment-destinations`.
 
 `/booking/new` and `/payment/update` are top-level routes outside the `ShellRoute` (no bottom nav bar). Both return `bool` via `context.pop(true)` on save so the caller can refresh.
 
@@ -233,10 +234,16 @@ PATCH /booking_groups?id=eq.<id>&property_id=eq.<pid>
   -- payment_received, actual_payment_amount, payment_destination_id,
   -- payment_received_date, payment_notes, updated_at
 
-# Reports: joins booking_days → booking_groups → payment_destinations, aggregated client-side
+# Payment report: booking_days → booking_groups → payment_destinations
 GET /booking_days?property_id=eq.<id>&booking_date=gte.<start>&booking_date=lte.<end>&is_active=eq.true
-  &select=amount,room_id,rooms(name),booking_groups!inner(payment_destination_id,payment_destinations(*))
+  &select=amount,room_id,rooms(name),booking_groups!inner(payment_destination_id,is_active,payment_destinations(name))
   &booking_groups.is_active=eq.true
+
+# Type report: booking_days → booking_groups → booking_types
+GET /booking_days?...&select=amount,room_id,rooms(name),booking_groups!inner(booking_type_id,is_active,booking_types(name))
+
+# Source report: booking_days → booking_groups → booking_sources
+GET /booking_days?...&select=amount,room_id,rooms(name),booking_groups!inner(booking_source_id,is_active,booking_sources(name))
 
 # PIN verification (auth):
 GET /pins?pin=eq.<pin>&is_active=eq.true
@@ -244,7 +251,7 @@ GET /pins?pin=eq.<pin>&is_active=eq.true
   (single row — .maybeSingle())
 ```
 
-Reports aggregation happens **client-side** in `ReportsRepository` — raw rows are grouped by room → destination into `RoomPaymentSummary` objects. Null `payment_destination_id` is displayed as "Not specified".
+All three reports aggregate **client-side** in `ReportsRepository`/`ReportsCubit`. Payment report groups into `RoomPaymentSummary` (room → destination). Type and Source reports use the shared `_aggregateCategory` helper in `ReportsCubit`, producing `RoomCategorySummary` (room → type/source). Null FK values are displayed as "Not specified" in all reports.
 
 ---
 
@@ -332,6 +339,22 @@ Fields captured:
 The read-only reference card at the top (surface/border container) shows — in order — OTA ID (with clipboard copy), dates, source · type, customer name. Fields absent from the booking are silently omitted. Type and source names are resolved from `ConfigCubit` state via `context.read<ConfigCubit>()` in `build()`.
 
 `BookingRepository.updatePaymentDetails()` is a separate method that only PATCHes the five payment columns + `updated_at`. Do **not** route payment-only updates through `updateBookingGroup()`.
+
+---
+
+## Reports — Table View Pattern
+
+Booking Type Report (`/reports/booking-type`) and Booking Source Report (`/reports/booking-source`) render as a sticky-column table, not expansion tiles:
+
+- **Layout:** `Row` with a fixed-width sticky Room column + `Expanded(SingleChildScrollView(horizontal))` for the category columns. Both scroll vertically together inside an outer `SingleChildScrollView`.
+- **Columns:** one per unique category derived from `overallTotals`, plus a TOTAL column on the right.
+- **Rows:** one per room, plus a TOTAL footer row. Header and footer rows use `colors.background`; data rows use `colors.surface`. The TOTAL column uses `colors.background` throughout to distinguish it visually. Grand total cell uses `colors.accent`.
+- **Empty cells:** rooms with no bookings for a given category show `—` (not `₹0`).
+- **Amounts:** formatted as whole numbers (`NumberFormat('#,##0')`).
+
+The `_aggregateCategory` private method in `ReportsCubit` handles grouping for both reports — pass a different `fetchTypeReportRows` / `fetchSourceReportRows` repo call and the matching loaded/error state constructors.
+
+**Do not use `firstWhere(orElse: () => null)` on `List rooms`** — at runtime it's `List<Room>` and `Null` is not a valid return type. Use `indexWhere` instead.
 
 ---
 

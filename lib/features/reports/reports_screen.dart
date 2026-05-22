@@ -34,6 +34,22 @@ class ReportsScreen extends StatelessWidget {
             colors: colors,
             onTap: () => context.push('/reports/payment'),
           ),
+          const SizedBox(height: 8),
+          _ReportCard(
+            icon: Icons.category_outlined,
+            title: 'Booking Type Report',
+            subtitle: 'Room-wise booking type breakdown',
+            colors: colors,
+            onTap: () => context.push('/reports/booking-type'),
+          ),
+          const SizedBox(height: 8),
+          _ReportCard(
+            icon: Icons.source_outlined,
+            title: 'Booking Source Report',
+            subtitle: 'Room-wise booking source breakdown',
+            colors: colors,
+            onTap: () => context.push('/reports/booking-source'),
+          ),
         ],
       ),
     );
