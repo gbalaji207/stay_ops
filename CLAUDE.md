@@ -176,11 +176,12 @@ Settings tab (and Reports tab for staff) are **fully absent from the widget tree
 These are non-obvious and critical to get right:
 
 - **Night count:** `check_out − check_in`. `check_out` is the departure day (exclusive). Single night: `check_in=May 13, check_out=May 14`.
-- **Amount split:** `total_amount / nights` — decimal, no rounding redistribution. `NUMERIC(10,2)` handles precision. `total_amount` on `booking_groups` is the source of truth.
-- **`netAmount` (computed, not stored):** `totalAmount − (commissionInclTax ?? 0) − (taxDeduction ?? 0)`. Available as a getter on both `BookingGroup` and `BookingGroupInput`. Never stored in DB.
+- **`total_amount`** on `booking_groups` is the gross amount — source of truth for the booking value.
+- **`net_amount`** on `booking_groups` is stored (`NUMERIC(10,2)`). It equals `totalAmount − (commissionInclTax ?? 0) − (taxDeduction ?? 0)` for manually-entered bookings. For SF-imported bookings it is the value returned directly by the SF edge function (`net_amount` field), which may differ from the local formula. `BookingGroup.fromJson` falls back to the formula for rows that predate the column.
+- **`booking_days.amount`** (per-night) stores **net per night** = `netAmount / nights`. It is computed by `BookingGroupInput.perNightAmount` at save/update time — never re-read for display.
 - **Payment status:** Boolean (`payment_received`) on `booking_groups` only — not per night. Extended by three nullable payment columns: `actual_payment_amount NUMERIC(10,2)`, `payment_received_date DATE`, `payment_notes TEXT`.
 - **Edit always opens full group:** Tapping any night (daily card or monthly row) fetches and opens the entire `booking_group`.
-- **Soft-delete only:** Never hard-delete. Set `is_active = false`.
+- **Delete is hard delete:** `BookingRepository.deleteBookingGroup()` issues `DELETE` on `booking_days` first (FK child), then `booking_groups`. This is triggered from the trash-icon `IconButton` in the Edit Booking AppBar (edit mode only). All other mutations use soft-delete (`is_active = false`).
 - **Range shrink on edit:** Removed nights → `is_active=false` on their `booking_days` rows. Remaining rows get recalculated amount.
 
 ---
@@ -222,12 +223,16 @@ SELECT booking_groups.* FROM booking_groups
 JOIN booking_days ON booking_days.booking_group_id = booking_groups.id
 WHERE booking_days.room_id = :roomId AND booking_days.booking_date = :date AND booking_days.is_active = true
 
-# Save: POST /booking_groups → get id → POST /booking_days (array, one per night)
+# Save: POST /booking_groups (includes net_amount) → get id → POST /booking_days (array, one per night, amount = net per night)
 
 # Edit update sequence:
-PATCH /booking_groups?id=eq.<id>          -- update metadata
+PATCH /booking_groups?id=eq.<id>          -- update metadata including net_amount
 PATCH /booking_days (removed nights)      -- is_active=false
-PATCH /booking_days (remaining nights)    -- recalculated amount
+PATCH /booking_days (remaining nights)    -- recalculated net per-night amount
+
+# Delete (hard delete — from Edit Booking trash button):
+DELETE /booking_days?booking_group_id=eq.<id>&property_id=eq.<pid>
+DELETE /booking_groups?id=eq.<id>&property_id=eq.<pid>
 
 # Payment-only update (does NOT touch booking_days):
 PATCH /booking_groups?id=eq.<id>&property_id=eq.<pid>
@@ -305,6 +310,8 @@ Steps: 1 = Room (`wizard_step1_room.dart`), 2 = Dates + Guest + Type/Source (`wi
 - Payment destination: auto-filled from source's `defaultPaymentDestinationId` when source is changed; always shown.
 - Back navigation: edit/SF prefill mode exits on back from step 4 (doesn't step back through wizard).
 - **Edit mode only — payment shortcut:** Step 4's "Net amount" row includes a `TextButton` on the right edge. Label is **"Update Receival"** when `paymentReceived == false`, **"Payment Status"** when already received. Tapping pushes `/payment/update`; if payment is saved the wizard pops with `true`. Wired via `onUpdatePayment: VoidCallback?` + `paymentAlreadyReceived: bool` params on `WizardStep4Review` — both are `null`/`false` for new bookings.
+- **Edit mode only — delete:** The AppBar shows a `Icons.delete_outline_rounded` `IconButton` (in `colors.danger`) that calls `BookingRepository.deleteBookingGroup()` after an `AlertDialog` confirmation, then pops with `true`.
+- **Net amount display and save:** `_BookingWizardScreenState` holds `double? _netAmountOverride`, seeded in `initState` from `existingGroup?.netAmount ?? sfPrefill?.netAmount`. This is passed as `overrideNetAmount` to `WizardStep4Review` (for display) and as `netAmountOverride` to `BookingGroupInput` (for save). `_onAmountChanged` clears it to `null` on the first keystroke in any amount field, at which point both display and saved value switch to the live formula.
 
 ---
 
@@ -322,7 +329,7 @@ Dialog flow:
 
 SF JSON → wizard field mapping:
 - `internal_room_id` → room, `checkin`/`checkout` → stay dates (date part only), `booking_made_on` → booking date
-- `ota_gross_amount` → gross, `ota_tax_amount` → tax, `ota_commission` → commission, `tax_deduction` → TDS/TCS
+- `ota_gross_amount` → gross, `ota_tax_amount` → tax, `ota_commission` → commission, `tax_deduction` → TDS/TCS, `net_amount` → `SfBookingPrefill.netAmount`
 - `customer_name`, `sfBookingId`, `ota_booking_id` → respective text fields
 
 ---
@@ -341,7 +348,7 @@ The route carrier is `PaymentUpdateExtras` (carries `BookingGroup` + `List<Payme
 Fields captured:
 | Field | Pre-fill source |
 |---|---|
-| Amount received | `group.netAmount` (computed) |
+| Amount received | `group.netAmount` (stored value) |
 | Payment destination | `group.paymentDestinationId` (guarded against active list) |
 | Payment received date | Today; `lastDate: DateTime.now()` |
 | Payment notes | `group.paymentNotes` |
@@ -350,6 +357,12 @@ Fields captured:
 The read-only reference card at the top (surface/border container) shows — in order — OTA ID (with clipboard copy), dates, source · type, customer name. Fields absent from the booking are silently omitted. Type and source names are resolved from `ConfigCubit` state via `context.read<ConfigCubit>()` in `build()`.
 
 `BookingRepository.updatePaymentDetails()` is a separate method that only PATCHes the five payment columns + `updated_at`. Do **not** route payment-only updates through `updateBookingGroup()`.
+
+---
+
+## Home Screen — Amounts Displayed
+
+`BookingCard` (used in check-outs, check-ins, and payment pending sections) displays `group.netAmount` — not `totalAmount`. The "Payment pending" section header subtitle (`₹X due`) also sums `netAmount` across pending groups. This is intentional: `netAmount` is the actual receivable after commission and TDS/TCS deductions.
 
 ---
 

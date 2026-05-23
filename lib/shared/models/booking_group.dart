@@ -9,6 +9,7 @@ class BookingGroup extends Equatable {
     required this.checkOut,
     required this.totalAmount,
     required this.paymentReceived,
+    required this.netAmount,
     this.bookingDate,
     this.bookingTypeId,
     this.bookingSourceId,
@@ -34,6 +35,7 @@ class BookingGroup extends Equatable {
   final DateTime checkOut;
   final double totalAmount;
   final bool paymentReceived;
+  final double netAmount;
   final DateTime? bookingDate;
   final String? bookingTypeId;
   final String? bookingSourceId;
@@ -53,19 +55,25 @@ class BookingGroup extends Equatable {
 
   int get nights => checkOut.difference(checkIn).inDays;
   double get perNightAmount => nights > 0 ? totalAmount / nights : 0;
-  double get netAmount =>
-      totalAmount - (commissionInclTax ?? 0) - (taxDeduction ?? 0);
 
   factory BookingGroup.fromJson(Map<String, dynamic> json) {
     final destMap = json['payment_destinations'] as Map<String, dynamic>?;
+    final totalAmount = (json['total_amount'] as num).toDouble();
+    final commissionInclTax =
+        (json['commission_incl_tax'] as num?)?.toDouble();
+    final taxDeduction = (json['tax_deduction'] as num?)?.toDouble();
+    // Use stored net_amount; fall back to computed for rows predating the column
+    final netAmount = (json['net_amount'] as num?)?.toDouble() ??
+        (totalAmount - (commissionInclTax ?? 0) - (taxDeduction ?? 0));
     return BookingGroup(
       id: json['id'] as String,
       propertyId: json['property_id'] as String,
       roomId: json['room_id'] as String,
       checkIn: DateTime.parse(json['check_in'] as String),
       checkOut: DateTime.parse(json['check_out'] as String),
-      totalAmount: (json['total_amount'] as num).toDouble(),
+      totalAmount: totalAmount,
       paymentReceived: json['payment_received'] as bool,
+      netAmount: netAmount,
       bookingDate: json['booking_date'] != null
           ? DateTime.parse(json['booking_date'] as String)
           : null,
@@ -79,8 +87,8 @@ class BookingGroup extends Equatable {
       stayFlexiBookingId: json['stay_flexi_booking_id'] as String?,
       otaBookingId: json['ota_booking_id'] as String?,
       taxAmount: (json['tax_amount'] as num?)?.toDouble(),
-      commissionInclTax: (json['commission_incl_tax'] as num?)?.toDouble(),
-      taxDeduction: (json['tax_deduction'] as num?)?.toDouble(),
+      commissionInclTax: commissionInclTax,
+      taxDeduction: taxDeduction,
       actualPaymentAmount:
           (json['actual_payment_amount'] as num?)?.toDouble(),
       paymentReceivedDate: json['payment_received_date'] != null
@@ -99,6 +107,7 @@ class BookingGroup extends Equatable {
         checkOut,
         totalAmount,
         paymentReceived,
+        netAmount,
         bookingDate,
         bookingTypeId,
         bookingSourceId,

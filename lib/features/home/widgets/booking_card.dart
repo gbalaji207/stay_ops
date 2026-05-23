@@ -62,7 +62,7 @@ class BookingCard extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  '₹${_amtFmt.format(group.totalAmount)}',
+                  '₹${_amtFmt.format(group.netAmount)}',
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,

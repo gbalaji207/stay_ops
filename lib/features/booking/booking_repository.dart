@@ -58,6 +58,7 @@ class BookingRepository {
       'tax_amount': input.taxAmount,
       'commission_incl_tax': input.commissionInclTax,
       'tax_deduction': input.taxDeduction,
+      'net_amount': input.netAmount,
     }).select('id').single();
 
     final groupId = groupRow['id'] as String;
@@ -176,6 +177,7 @@ class BookingRepository {
       'tax_amount': input.taxAmount,
       'commission_incl_tax': input.commissionInclTax,
       'tax_deduction': input.taxDeduction,
+      'net_amount': input.netAmount,
       'updated_at': DateTime.now().toIso8601String(),
     }).eq('id', groupId);
 
@@ -239,6 +241,22 @@ class BookingRepository {
         .limit(1);
     if ((rows as List).isEmpty) return null;
     return BookingGroup.fromJson(rows.first);
+  }
+
+  Future<void> deleteBookingGroup(String groupId) async {
+    // Hard-delete all booking_days for this group
+    await _client
+        .from('booking_days')
+        .delete()
+        .eq('booking_group_id', groupId)
+        .eq('property_id', AppConstants.propertyId);
+
+    // Hard-delete the booking_group itself
+    await _client
+        .from('booking_groups')
+        .delete()
+        .eq('id', groupId)
+        .eq('property_id', AppConstants.propertyId);
   }
 
   String _fmt(DateTime date) =>

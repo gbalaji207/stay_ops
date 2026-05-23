@@ -14,6 +14,7 @@ class SfBookingPrefill {
     this.taxAmount,
     this.commissionInclTax,
     this.taxDeduction,
+    this.netAmount,
   });
 
   final String? roomId;
@@ -30,6 +31,7 @@ class SfBookingPrefill {
   final double? taxAmount;
   final double? commissionInclTax;
   final double? taxDeduction;
+  final double? netAmount;
 
   static DateTime? _parseDate(String? s) {
     if (s == null) return null;
@@ -88,6 +90,7 @@ class SfBookingPrefill {
       taxAmount: (json['ota_tax_amount'] as num?)?.toDouble(),
       commissionInclTax: (json['ota_commission'] as num?)?.toDouble(),
       taxDeduction: (json['tax_deduction'] as num?)?.toDouble(),
+      netAmount: (json['net_amount'] as num?)?.toDouble(),
     );
   }
 }

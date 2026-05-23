@@ -17,6 +17,7 @@ class BookingGroupInput {
     this.taxAmount,
     this.commissionInclTax,
     this.taxDeduction,
+    this.netAmountOverride,
   });
 
   // null = new booking, non-null = editing existing group
@@ -37,6 +38,8 @@ class BookingGroupInput {
   final double? taxAmount;
   final double? commissionInclTax;
   final double? taxDeduction;
+  // When set, overrides the computed net amount (e.g. value from SF edge function)
+  final double? netAmountOverride;
 
   // [checkIn, checkIn+1, ..., checkOut-1] — checkOut is exclusive
   List<DateTime> get nights {
@@ -53,5 +56,6 @@ class BookingGroupInput {
   int get nightCount => checkOut.difference(checkIn).inDays;
   double get perNightAmount => nightCount > 0 ? netAmount / nightCount : 0;
   double get netAmount =>
-      totalAmount - (commissionInclTax ?? 0) - (taxDeduction ?? 0);
+      netAmountOverride ??
+      (totalAmount - (commissionInclTax ?? 0) - (taxDeduction ?? 0));
 }

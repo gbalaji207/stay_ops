@@ -40,6 +40,7 @@ class WizardStep4Review extends StatelessWidget {
     required this.isEditMode,
     this.onUpdatePayment,
     this.paymentAlreadyReceived = false,
+    this.overrideNetAmount,
   });
 
   final List<Room> rooms;
@@ -69,6 +70,7 @@ class WizardStep4Review extends StatelessWidget {
   final bool isEditMode;
   final VoidCallback? onUpdatePayment;
   final bool paymentAlreadyReceived;
+  final double? overrideNetAmount;
 
   static final _amountFmt = NumberFormat('#,##0.##');
 
@@ -85,7 +87,8 @@ class WizardStep4Review extends StatelessWidget {
   double get _tdsTcsAmount =>
       double.tryParse(tdsTcsController.text.replaceAll(',', '')) ?? 0;
 
-  double get _netAmount => _grossAmount - _commissionAmount - _tdsTcsAmount;
+  double get _netAmount =>
+      overrideNetAmount ?? (_grossAmount - _commissionAmount - _tdsTcsAmount);
 
   bool get _canSave =>
       _grossAmount > 0 && _nightCount > 0 && selectedRoomId != null;

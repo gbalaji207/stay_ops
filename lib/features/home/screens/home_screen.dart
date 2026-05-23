@@ -210,7 +210,7 @@ class _HomeScreenState extends State<HomeScreen> {
     String? sourceName(String? id) => id != null ? sourceNames[id] : null;
 
     final pendingTotal =
-        state.paymentPending.fold<double>(0, (sum, g) => sum + g.totalAmount);
+        state.paymentPending.fold<double>(0, (sum, g) => sum + g.netAmount);
     final pendingTotalStr = NumberFormat('#,##0.##').format(pendingTotal);
 
     return Scaffold(

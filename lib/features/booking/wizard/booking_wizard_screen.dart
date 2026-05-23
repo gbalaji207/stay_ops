@@ -52,6 +52,9 @@ class _BookingWizardScreenState extends State<BookingWizardScreen> {
   final _notesController = TextEditingController();
   bool _paymentReceived = false;
   String? _paymentDestinationId;
+  // Overrides the computed net amount display/save; cleared once the user edits
+  // any amount field so live computation resumes automatically.
+  double? _netAmountOverride;
 
   @override
   void initState() {
@@ -73,6 +76,7 @@ class _BookingWizardScreenState extends State<BookingWizardScreen> {
     _paymentReceived = group?.paymentReceived ?? false;
     _paymentDestinationId =
         group?.paymentDestinationId ?? sf?.paymentDestinationId;
+    _netAmountOverride = group?.netAmount ?? sf?.netAmount;
     _notesController.text = group?.notes ?? '';
     _customerNameController.text = group?.customerName ?? sf?.customerName ?? '';
     _stayFlexiBookingIdController.text =
@@ -153,7 +157,7 @@ class _BookingWizardScreenState extends State<BookingWizardScreen> {
     return v.toString();
   }
 
-  void _onAmountChanged() => setState(() {});
+  void _onAmountChanged() => setState(() => _netAmountOverride = null);
 
   void _goToStep(int step) {
     _pageController.animateToPage(
@@ -197,6 +201,42 @@ class _BookingWizardScreenState extends State<BookingWizardScreen> {
     return double.tryParse(t.replaceAll(',', ''));
   }
 
+  Future<void> _confirmDeleteBooking(BuildContext context) async {
+    final colors = Theme.of(context).extension<AppColors>()!;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Booking'),
+        content: const Text(
+          'This will permanently remove this booking and all its nights. This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: colors.danger),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    try {
+      await BookingRepository()
+          .deleteBookingGroup(widget.extras.existingGroup!.id);
+      if (context.mounted) context.pop(true);
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to delete booking: $e')),
+        );
+      }
+    }
+  }
+
   Future<void> _openPaymentUpdate(BuildContext context) async {
     final group = widget.extras.existingGroup!;
     final configState = context.read<ConfigCubit>().state;
@@ -238,6 +278,7 @@ class _BookingWizardScreenState extends State<BookingWizardScreen> {
         taxAmount: _parseOptional(_taxAmountController.text),
         commissionInclTax: _parseOptional(_commissionController.text),
         taxDeduction: _parseOptional(_tdsTcsController.text),
+        netAmountOverride: _netAmountOverride,
       ),
     );
   }
@@ -330,6 +371,20 @@ class _BookingWizardScreenState extends State<BookingWizardScreen> {
                 ),
               ),
               centerTitle: true,
+              actions: widget.extras.existingGroup != null
+                  ? [
+                      IconButton(
+                        icon: Icon(
+                          Icons.delete_outline_rounded,
+                          color: isBusy ? null : colors.danger,
+                        ),
+                        tooltip: 'Delete booking',
+                        onPressed: isBusy
+                            ? null
+                            : () => _confirmDeleteBooking(context),
+                      ),
+                    ]
+                  : null,
             ),
             body: PageView(
               controller: _pageController,
@@ -414,6 +469,7 @@ class _BookingWizardScreenState extends State<BookingWizardScreen> {
                       : null,
                   paymentAlreadyReceived:
                       widget.extras.existingGroup?.paymentReceived ?? false,
+                  overrideNetAmount: _netAmountOverride,
                 ),
               ],
             ),
