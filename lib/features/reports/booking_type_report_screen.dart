@@ -429,11 +429,13 @@ class _TableReportBody extends StatelessWidget {
   final NumberFormat amountFmt;
 
   static const double _roomColW = 110.0;
-  static const double _dataColW = 100.0;
+  static const double _dataColW = 130.0;
   static const double _rowH = 44.0;
 
-  String _fmt(double v) => '₹${amountFmt.format(v)}';
-  String _fmtOrDash(double? v) => (v == null || v == 0) ? '—' : _fmt(v);
+  String _fmt(double v, int count) =>
+      '₹${amountFmt.format(v)} ($count)';
+  String _fmtOrDash(double? v, int? count) =>
+      (v == null || v == 0) ? '—' : _fmt(v, count ?? 0);
 
   @override
   Widget build(BuildContext context) {
@@ -442,6 +444,12 @@ class _TableReportBody extends StatelessWidget {
       for (final r in roomRows)
         r.roomId: {for (final c in r.byCategory) c.categoryId: c.amount},
     };
+    final counts = {
+      for (final r in roomRows)
+        r.roomId: {for (final c in r.byCategory) c.categoryId: c.count},
+    };
+    final grandTotalCount =
+        overallTotals.fold(0, (sum, t) => sum + t.count);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -480,16 +488,21 @@ class _TableReportBody extends StatelessWidget {
                     for (final r in roomRows)
                       Row(children: [
                         for (final col in overallTotals)
-                          _dc(_fmtOrDash(amts[r.roomId]?[col.categoryId]),
-                              bdr),
-                        _dc(_fmt(r.roomTotal), bdr,
+                          _dc(
+                            _fmtOrDash(
+                              amts[r.roomId]?[col.categoryId],
+                              counts[r.roomId]?[col.categoryId],
+                            ),
+                            bdr,
+                          ),
+                        _dc(_fmt(r.roomTotal, r.count), bdr,
                             isBold: true, isTotalCol: true),
                       ]),
                     Row(children: [
                       for (final col in overallTotals)
-                        _dc(_fmt(col.amount), bdr,
+                        _dc(_fmt(col.amount, col.count), bdr,
                             isFoot: true, isBold: true),
-                      _dc(_fmt(grandTotal), bdr,
+                      _dc(_fmt(grandTotal, grandTotalCount), bdr,
                           isFoot: true, isTotalCol: true, isBold: true),
                     ]),
                   ],

@@ -431,10 +431,14 @@ class _ReportBody extends StatelessWidget {
   final AppColors colors;
   final NumberFormat amountFmt;
 
-  String _fmt(double amount) => '₹${amountFmt.format(amount)}';
+  String _fmt(double amount, int count) =>
+      '₹${amountFmt.format(amount)} ($count)';
 
   @override
   Widget build(BuildContext context) {
+    final grandTotalCount =
+        overallTotals.fold(0, (sum, t) => sum + t.count);
+
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -466,7 +470,7 @@ class _ReportBody extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        _fmt(room.roomTotal),
+                        _fmt(room.roomTotal, room.count),
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
@@ -501,7 +505,7 @@ class _ReportBody extends StatelessWidget {
                             ),
                             const Spacer(),
                             Text(
-                              _fmt(dest.amount),
+                              _fmt(dest.amount, dest.count),
                               style: TextStyle(
                                 fontSize: 13,
                                 color: colors.textPrimary,
@@ -558,7 +562,7 @@ class _ReportBody extends StatelessWidget {
                       ),
                       const Spacer(),
                       Text(
-                        _fmt(dest.amount),
+                        _fmt(dest.amount, dest.count),
                         style: TextStyle(
                           fontSize: 13,
                           color: colors.textPrimary,
@@ -585,7 +589,7 @@ class _ReportBody extends StatelessWidget {
                     ),
                     const Spacer(),
                     Text(
-                      _fmt(grandTotal),
+                      _fmt(grandTotal, grandTotalCount),
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,

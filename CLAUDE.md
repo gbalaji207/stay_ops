@@ -108,6 +108,8 @@ The PIN screen is always rendered in dark theme regardless of system setting.
 
 `AuthCubit.switchProperty(id)` updates `AppSession`, persists the new ID, and re-emits `AuthAuthenticated`. This triggers the `app.dart` listener which reloads config for the new property.
 
+The home screen header shows `auth.activeProperty.name` in an `accentSubtle` pill (top-right). When the PIN has more than one property, the pill shows a swap icon and opens a bottom-sheet picker (`_showPropertySwitcher`) that calls `AuthCubit.switchProperty`. Single-property PINs see a non-tappable label.
+
 ### AppSession & AppConstants
 
 `AppConstants.propertyId` and `AppConstants.sfHotelId` are **getters** that proxy through `AppSession._activePropertyId / _activeSfHotelId` (mutable statics). Call `AppSession.setActiveProperty(PropertyInfo)` to update — all 28+ repository call-sites that use `AppConstants.propertyId` update transparently with no further changes.
@@ -241,14 +243,14 @@ PATCH /booking_groups?id=eq.<id>&property_id=eq.<pid>
 
 # Payment report: booking_days → booking_groups → payment_destinations
 GET /booking_days?property_id=eq.<id>&booking_date=gte.<start>&booking_date=lte.<end>&is_active=eq.true
-  &select=amount,room_id,rooms(name),booking_groups!inner(payment_destination_id,is_active,payment_destinations(name))
+  &select=amount,room_id,rooms(name),booking_groups!inner(id,payment_destination_id,is_active,payment_destinations(name))
   &booking_groups.is_active=eq.true
 
 # Type report: booking_days → booking_groups → booking_types
-GET /booking_days?...&select=amount,room_id,rooms(name),booking_groups!inner(booking_type_id,is_active,booking_types(name))
+GET /booking_days?...&select=amount,room_id,rooms(name),booking_groups!inner(id,booking_type_id,is_active,booking_types(name))
 
 # Source report: booking_days → booking_groups → booking_sources
-GET /booking_days?...&select=amount,room_id,rooms(name),booking_groups!inner(booking_source_id,is_active,booking_sources(name))
+GET /booking_days?...&select=amount,room_id,rooms(name),booking_groups!inner(id,booking_source_id,is_active,booking_sources(name))
 
 # Fetch group by OTA booking ID (for payment update search FAB):
 GET /booking_groups?ota_booking_id=eq.<id>&property_id=eq.<pid>&is_active=eq.true&limit=1
@@ -259,7 +261,7 @@ GET /pins?pin=eq.<pin>&is_active=eq.true
   (single row — .maybeSingle())
 ```
 
-All three reports aggregate **client-side** in `ReportsRepository`/`ReportsCubit`. Payment report groups into `RoomPaymentSummary` (room → destination). Type and Source reports use the shared `_aggregateCategory` helper in `ReportsCubit`, producing `RoomCategorySummary` (room → type/source). Null FK values are displayed as "Not specified" in all reports.
+All three reports aggregate **client-side** in `ReportsCubit` (the repository only fetches raw rows). Payment report groups into `RoomPaymentSummary` (room → destination). Type and Source reports use the shared `_aggregateCategory` helper in `ReportsCubit`, producing `RoomCategorySummary` (room → type/source). Null FK values are displayed as "Not specified" in all reports.
 
 ---
 
@@ -370,13 +372,17 @@ The read-only reference card at the top (surface/border container) shows — in 
 
 Booking Type Report (`/reports/booking-type`) and Booking Source Report (`/reports/booking-source`) render as a sticky-column table, not expansion tiles:
 
-- **Layout:** `Row` with a fixed-width sticky Room column + `Expanded(SingleChildScrollView(horizontal))` for the category columns. Both scroll vertically together inside an outer `SingleChildScrollView`.
-- **Columns:** one per unique category derived from `overallTotals`, plus a TOTAL column on the right.
+- **Layout:** `Row` with a fixed-width sticky Room column (`_roomColW = 110`) + `Expanded(SingleChildScrollView(horizontal))` for the category columns. Both scroll vertically together inside an outer `SingleChildScrollView`.
+- **Columns:** one per unique category derived from `overallTotals`, plus a TOTAL column on the right. Data column width `_dataColW = 130`.
 - **Rows:** one per room, plus a TOTAL footer row. Header and footer rows use `colors.background`; data rows use `colors.surface`. The TOTAL column uses `colors.background` throughout to distinguish it visually. Grand total cell uses `colors.accent`.
 - **Empty cells:** rooms with no bookings for a given category show `—` (not `₹0`).
-- **Amounts:** formatted as whole numbers (`NumberFormat('#,##0')`).
+- **Amounts + counts:** each non-empty cell shows `₹X,XXX (N)` where N = number of unique `booking_group` records. Multi-night bookings count as 1, not N. Counting is done by deduplicating `booking_group_id` via `Set<String>` per room×category during aggregation.
 
-The `_aggregateCategory` private method in `ReportsCubit` handles grouping for both reports — pass a different `fetchTypeReportRows` / `fetchSourceReportRows` repo call and the matching loaded/error state constructors.
+### Report data models
+
+`CategoryTotal` and `DestinationTotal` carry a `count: int` field (unique booking groups for that cell). `RoomCategorySummary` and `RoomPaymentSummary` carry a `count: int` equal to the sum of their breakdown counts (valid because each booking belongs to exactly one category/destination). Grand total count is computed inline: `overallTotals.fold(0, (s, t) => s + t.count)`.
+
+The `_aggregateCategory` private method in `ReportsCubit` handles grouping for both table reports. Payment report uses the same counting approach inside `loadPaymentReport`. All three methods track `Map<roomId, Map<categoryId?, Set<bookingGroupId>>>` to count unique groups per cell.
 
 **Do not use `firstWhere(orElse: () => null)` on `List rooms`** — at runtime it's `List<Room>` and `Null` is not a valid return type. Use `indexWhere` instead.
 

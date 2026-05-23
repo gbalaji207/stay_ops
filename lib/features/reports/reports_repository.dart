@@ -9,6 +9,7 @@ class RawReportRow {
     required this.destinationId,
     required this.destinationName,
     required this.amount,
+    required this.bookingGroupId,
   });
 
   final String roomId;
@@ -16,6 +17,7 @@ class RawReportRow {
   final String? destinationId;
   final String? destinationName;
   final double amount;
+  final String bookingGroupId;
 }
 
 class RawCategoryReportRow {
@@ -25,6 +27,7 @@ class RawCategoryReportRow {
     required this.categoryId,
     required this.categoryName,
     required this.amount,
+    required this.bookingGroupId,
   });
 
   final String roomId;
@@ -32,6 +35,7 @@ class RawCategoryReportRow {
   final String? categoryId;
   final String? categoryName;
   final double amount;
+  final String bookingGroupId;
 }
 
 class ReportsRepository {
@@ -46,7 +50,7 @@ class ReportsRepository {
         .from('booking_days')
         .select(
           'amount,room_id,rooms(name),'
-          'booking_groups!inner(payment_destination_id,is_active,'
+          'booking_groups!inner(id,payment_destination_id,is_active,'
           'payment_destinations(name))',
         )
         .eq('property_id', AppConstants.propertyId)
@@ -73,6 +77,7 @@ class ReportsRepository {
         destinationId: bg['payment_destination_id'] as String?,
         destinationName: destMap?['name'] as String?,
         amount: (row['amount'] as num).toDouble(),
+        bookingGroupId: bg['id'] as String,
       );
     }).toList();
   }
@@ -86,7 +91,7 @@ class ReportsRepository {
         .from('booking_days')
         .select(
           'amount,room_id,rooms(name),'
-          'booking_groups!inner(booking_type_id,is_active,'
+          'booking_groups!inner(id,booking_type_id,is_active,'
           'booking_types(name))',
         )
         .eq('property_id', AppConstants.propertyId)
@@ -113,6 +118,7 @@ class ReportsRepository {
         categoryId: bg['booking_type_id'] as String?,
         categoryName: typeMap?['name'] as String?,
         amount: (row['amount'] as num).toDouble(),
+        bookingGroupId: bg['id'] as String,
       );
     }).toList();
   }
@@ -126,7 +132,7 @@ class ReportsRepository {
         .from('booking_days')
         .select(
           'amount,room_id,rooms(name),'
-          'booking_groups!inner(booking_source_id,is_active,'
+          'booking_groups!inner(id,booking_source_id,is_active,'
           'booking_sources(name))',
         )
         .eq('property_id', AppConstants.propertyId)
@@ -153,6 +159,7 @@ class ReportsRepository {
         categoryId: bg['booking_source_id'] as String?,
         categoryName: sourceMap?['name'] as String?,
         amount: (row['amount'] as num).toDouble(),
+        bookingGroupId: bg['id'] as String,
       );
     }).toList();
   }

@@ -5,15 +5,17 @@ class CategoryTotal extends Equatable {
     required this.categoryId,
     required this.categoryName,
     required this.amount,
+    required this.count,
   });
 
   // null means "Not specified"
   final String? categoryId;
   final String? categoryName;
   final double amount;
+  final int count;
 
   @override
-  List<Object?> get props => [categoryId, categoryName, amount];
+  List<Object?> get props => [categoryId, categoryName, amount, count];
 }
 
 class RoomCategorySummary extends Equatable {
@@ -22,13 +24,15 @@ class RoomCategorySummary extends Equatable {
     required this.roomName,
     required this.roomTotal,
     required this.byCategory,
+    required this.count,
   });
 
   final String roomId;
   final String roomName;
   final double roomTotal;
   final List<CategoryTotal> byCategory;
+  final int count;
 
   @override
-  List<Object?> get props => [roomId, roomName, roomTotal, byCategory];
+  List<Object?> get props => [roomId, roomName, roomTotal, byCategory, count];
 }

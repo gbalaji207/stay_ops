@@ -26,20 +26,25 @@ class ReportsCubit extends Cubit<ReportsState> {
       );
 
       // Aggregate client-side: group by roomId → destinationId
-      // roomId → { destinationKey → (name, total) }
       final roomMap = <String, String>{}; // roomId → roomName
       final roomDestMap =
           <String, Map<String?, double>>{}; // roomId → {destId → amount}
+      // Track unique booking group IDs per room×destination for counts
+      final roomDestGroupIds =
+          <String, Map<String?, Set<String>>>{}; // roomId → {destId → {groupIds}}
 
       for (final row in rawRows) {
         roomMap[row.roomId] = row.roomName;
         roomDestMap.putIfAbsent(row.roomId, () => {});
         roomDestMap[row.roomId]![row.destinationId] =
             (roomDestMap[row.roomId]![row.destinationId] ?? 0) + row.amount;
+        roomDestGroupIds
+            .putIfAbsent(row.roomId, () => {})
+            .putIfAbsent(row.destinationId, () => {})
+            .add(row.bookingGroupId);
       }
 
       // Resolve destination names (null key = "Not specified")
-      // Build a lookup from raw rows
       final destNames = <String?, String?>{}; // destId → destName
       for (final row in rawRows) {
         destNames[row.destinationId] = row.destinationName;
@@ -50,6 +55,7 @@ class ReportsCubit extends Cubit<ReportsState> {
         final roomId = entry.key;
         final roomName = entry.value;
         final destTotals = roomDestMap[roomId]!;
+        final destGroupIds = roomDestGroupIds[roomId]!;
 
         final byDest = destTotals.entries
             .where((e) => e.value > 0)
@@ -58,6 +64,7 @@ class ReportsCubit extends Cubit<ReportsState> {
                 destinationId: e.key,
                 destinationName: e.key == null ? null : destNames[e.key],
                 amount: e.value,
+                count: destGroupIds[e.key]?.length ?? 0,
               ),
             )
             .toList()
@@ -69,22 +76,28 @@ class ReportsCubit extends Cubit<ReportsState> {
           });
 
         final roomTotal = byDest.fold(0.0, (sum, d) => sum + d.amount);
+        final roomCount = byDest.fold(0, (sum, d) => sum + d.count);
 
         return RoomPaymentSummary(
           roomId: roomId,
           roomName: roomName,
           roomTotal: roomTotal,
           byDestination: byDest,
+          count: roomCount,
         );
       }).toList()
         ..sort((a, b) => a.roomName.compareTo(b.roomName));
 
       // Overall totals: aggregate across all rooms by destination
       final overallMap = <String?, double>{};
+      final overallGroupIds = <String?, Set<String>>{};
       for (final room in roomRows) {
         for (final d in room.byDestination) {
           overallMap[d.destinationId] =
               (overallMap[d.destinationId] ?? 0) + d.amount;
+          overallGroupIds
+              .putIfAbsent(d.destinationId, () => {})
+              .addAll(roomDestGroupIds[room.roomId]?[d.destinationId] ?? {});
         }
       }
 
@@ -95,6 +108,7 @@ class ReportsCubit extends Cubit<ReportsState> {
               destinationId: e.key,
               destinationName: e.key == null ? null : destNames[e.key],
               amount: e.value,
+              count: overallGroupIds[e.key]?.length ?? 0,
             ),
           )
           .toList()
@@ -187,12 +201,18 @@ class ReportsCubit extends Cubit<ReportsState> {
   }) {
     final roomMap = <String, String>{};
     final roomCatMap = <String, Map<String?, double>>{};
+    // Track unique booking group IDs per room×category for counts
+    final roomCatGroupIds = <String, Map<String?, Set<String>>>{};
 
     for (final row in rawRows) {
       roomMap[row.roomId] = row.roomName;
       roomCatMap.putIfAbsent(row.roomId, () => {});
       roomCatMap[row.roomId]![row.categoryId] =
           (roomCatMap[row.roomId]![row.categoryId] ?? 0) + row.amount;
+      roomCatGroupIds
+          .putIfAbsent(row.roomId, () => {})
+          .putIfAbsent(row.categoryId, () => {})
+          .add(row.bookingGroupId);
     }
 
     final catNames = <String?, String?>{};
@@ -204,6 +224,7 @@ class ReportsCubit extends Cubit<ReportsState> {
       final roomId = entry.key;
       final roomName = entry.value;
       final catTotals = roomCatMap[roomId]!;
+      final catGroupIds = roomCatGroupIds[roomId]!;
 
       final byCat = catTotals.entries
           .where((e) => e.value > 0)
@@ -212,6 +233,7 @@ class ReportsCubit extends Cubit<ReportsState> {
               categoryId: e.key,
               categoryName: e.key == null ? null : catNames[e.key],
               amount: e.value,
+              count: catGroupIds[e.key]?.length ?? 0,
             ),
           )
           .toList()
@@ -222,20 +244,28 @@ class ReportsCubit extends Cubit<ReportsState> {
         });
 
       final roomTotal = byCat.fold(0.0, (sum, c) => sum + c.amount);
+      final roomCount = byCat.fold(0, (sum, c) => sum + c.count);
 
       return RoomCategorySummary(
         roomId: roomId,
         roomName: roomName,
         roomTotal: roomTotal,
         byCategory: byCat,
+        count: roomCount,
       );
     }).toList()
       ..sort((a, b) => a.roomName.compareTo(b.roomName));
 
+    // Overall totals: aggregate across all rooms per category
     final overallMap = <String?, double>{};
+    final overallGroupIds = <String?, Set<String>>{};
     for (final room in roomRows) {
       for (final c in room.byCategory) {
-        overallMap[c.categoryId] = (overallMap[c.categoryId] ?? 0) + c.amount;
+        overallMap[c.categoryId] =
+            (overallMap[c.categoryId] ?? 0) + c.amount;
+        overallGroupIds
+            .putIfAbsent(c.categoryId, () => {})
+            .addAll(roomCatGroupIds[room.roomId]?[c.categoryId] ?? {});
       }
     }
 
@@ -246,6 +276,7 @@ class ReportsCubit extends Cubit<ReportsState> {
             categoryId: e.key,
             categoryName: e.key == null ? null : catNames[e.key],
             amount: e.value,
+            count: overallGroupIds[e.key]?.length ?? 0,
           ),
         )
         .toList()
