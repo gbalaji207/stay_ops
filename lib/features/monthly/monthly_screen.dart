@@ -13,7 +13,11 @@ import 'monthly_cubit.dart';
 import 'monthly_repository.dart';
 
 class MonthlyScreen extends StatefulWidget {
-  const MonthlyScreen({super.key});
+  const MonthlyScreen({super.key, this.headerToggle});
+
+  /// Optional toggle widget injected by [BookingsScreen].
+  /// When present it replaces the "Monthly" title in the header row.
+  final Widget? headerToggle;
 
   @override
   State<MonthlyScreen> createState() => _MonthlyScreenState();
@@ -169,14 +173,15 @@ class _MonthlyScreenState extends State<MonthlyScreen> {
       padding: const EdgeInsets.fromLTRB(20, 16, 8, 12),
       child: Row(
         children: [
-          Text(
-            'Monthly',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-              color: colors.textPrimary,
-            ),
-          ),
+          widget.headerToggle ??
+              Text(
+                'Monthly',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                  color: colors.textPrimary,
+                ),
+              ),
           const Spacer(),
           IconButton(
             visualDensity: VisualDensity.compact,

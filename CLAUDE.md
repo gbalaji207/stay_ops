@@ -48,8 +48,8 @@ lib/
 │   │   ├── wizard/   # booking_wizard_screen, wizard_step1–4, booking_wizard_extras,
 │   │   │             # sf_booking_prefill, booking_group_input
 │   │   └── widgets/  # stay_flexi_search_dialog
-│   ├── daily/        # daily_screen (calendar grid), daily_cubit, daily_repository,
-│   │                 # calendar_booking, room_day_status, day_booking_row
+│   ├── daily/        # bookings_screen (Week/Month toggle host), daily_screen (calendar grid),
+│   │                 # daily_cubit, daily_repository, calendar_booking, room_day_status, day_booking_row
 │   ├── home/
 │   │   ├── cubit/        # home_cubit, home_state
 │   │   ├── repository/   # home_repository
@@ -166,11 +166,11 @@ redirect: (context, state) {
 
 `AuthLoading` is not `AuthAuthenticated`, so users stay on `/pin` during Supabase verification.
 
-Routes: `/pin`, `/home`, `/daily`, `/monthly`, `/reports`, `/reports/payment`, `/reports/booking-type`, `/reports/booking-source`, `/booking/new`, `/payment/update`, `/settings`, `/settings/rooms`, `/settings/booking-types`, `/settings/booking-sources`, `/settings/payment-destinations`.
+Routes: `/pin`, `/home`, `/bookings`, `/reports`, `/reports/payment`, `/reports/booking-type`, `/reports/booking-source`, `/booking/new`, `/payment/update`, `/settings`, `/settings/rooms`, `/settings/booking-types`, `/settings/booking-sources`, `/settings/payment-destinations`.
 
 `/booking/new` and `/payment/update` are top-level routes outside the `ShellRoute` (no bottom nav bar). Both return `bool` via `context.pop(true)` on save so the caller can refresh.
 
-Settings tab (and Reports tab for staff) are **fully absent from the widget tree** for staff — not hidden, not greyed out. Bottom nav has 5 items for owner, 4 for staff.
+Settings tab is **fully absent from the widget tree** for staff — not hidden, not greyed out. Bottom nav has 4 items for owner (Home, Bookings, Reports, Settings), 3 for staff (no Settings).
 
 ---
 
@@ -418,14 +418,26 @@ The `_aggregateCategory` private method in `ReportsCubit` handles grouping for b
 
 ---
 
-## Daily Calendar Timeline View (`/daily`)
+## Bookings Tab — Week/Month Toggle (`/bookings`)
 
-The daily screen is a **horizontal room × date grid** — not a single-day card list.
+The "Bookings" nav tab hosts both the weekly calendar view and the monthly heatmap view behind a single `BookingsScreen` (`features/daily/bookings_screen.dart`).
 
-### Layout
+### Architecture
+
+`BookingsScreen` is a `StatefulWidget` with `_showWeek` bool state. It renders an `IndexedStack` with `DailyScreen` (index 0) and `MonthlyScreen` (index 1). Both screens are mounted immediately so their state (anchor date / selected month) and cubit data are preserved across toggles — switching is instant with no re-fetch.
+
+The toggle widget (`_ViewToggle`) is built in `BookingsScreen.build` and injected into each child via the `headerToggle` parameter. Each screen renders it in place of its own title label:
+- `DailyScreen(headerToggle: ...)` → `_CalendarHeader` accepts an optional `titleWidget`; falls back to `Text('Daily')` when `null` (standalone use).
+- `MonthlyScreen(headerToggle: ...)` → `_buildHeader` uses `widget.headerToggle ?? Text('Monthly', ...)`.
+
+### Toggle design
+
+Pill-shaped container (`colors.surface` bg, `colors.border` border, `borderRadius: 8`, height 32). Two 64 px segments separated by a thin `VerticalDivider`. Selected segment: `colors.accentSubtle` bg + `colors.accent` w600 text. Unselected: transparent + `colors.textSecondary` w500 text. Transitions are `AnimatedContainer` + `AnimatedDefaultTextStyle` at 180 ms.
+
+### Daily calendar layout
 ```
 Scaffold → SafeArea → Column
-  _CalendarHeader   ← "Daily" title + prev/next arrows + date-range label (DatePicker tap)
+  _CalendarHeader   ← toggle (or "Daily" title) + prev/next arrows + date-range label (DatePicker tap)
   header Row        ← "Rooms" label + day column headers (_DayHeader)
   Divider
   Expanded → Stack

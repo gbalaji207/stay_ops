@@ -27,7 +27,11 @@ const double _kChipMinForAvatar = 52.0; // chip px threshold: below → text onl
 // ─── DailyScreen ─────────────────────────────────────────────────────────────
 
 class DailyScreen extends StatefulWidget {
-  const DailyScreen({super.key});
+  const DailyScreen({super.key, this.headerToggle});
+
+  /// Optional toggle widget injected by [BookingsScreen].
+  /// When present it replaces the "Daily" title in the header row.
+  final Widget? headerToggle;
 
   @override
   State<DailyScreen> createState() => _DailyScreenState();
@@ -204,6 +208,7 @@ class _DailyScreenState extends State<DailyScreen> {
                 setState(() => _anchorDate = picked);
                 _load(context);
               },
+              titleWidget: widget.headerToggle,
             ),
             // ── day column headers row ──────────────────────────────────────
             Container(
@@ -311,6 +316,7 @@ class _CalendarHeader extends StatelessWidget {
     required this.onPrev,
     required this.onNext,
     required this.onDatePicked,
+    this.titleWidget,
   });
 
   final DateTime anchorDate;
@@ -318,6 +324,8 @@ class _CalendarHeader extends StatelessWidget {
   final VoidCallback onPrev;
   final VoidCallback onNext;
   final ValueChanged<DateTime> onDatePicked;
+  /// When provided (injected from BookingsScreen) replaces the "Daily" label.
+  final Widget? titleWidget;
 
   @override
   Widget build(BuildContext context) {
@@ -334,14 +342,15 @@ class _CalendarHeader extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 16, 8, 12),
       child: Row(
         children: [
-          Text(
-            'Daily',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-              color: colors.textPrimary,
-            ),
-          ),
+          titleWidget ??
+              Text(
+                'Daily',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                  color: colors.textPrimary,
+                ),
+              ),
           const Spacer(),
           IconButton(
             visualDensity: VisualDensity.compact,

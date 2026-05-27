@@ -10,8 +10,7 @@ import 'features/auth/auth_cubit.dart';
 import 'features/home/screens/home_screen.dart';
 import 'features/config/config_cubit.dart';
 import 'features/config/config_repository.dart';
-import 'features/daily/daily_screen.dart';
-import 'features/monthly/monthly_screen.dart';
+import 'features/daily/bookings_screen.dart';
 import 'features/reports/booking_source_report_screen.dart';
 import 'features/reports/booking_type_report_screen.dart';
 import 'features/reports/payment_report_screen.dart';
@@ -89,12 +88,8 @@ GoRouter _buildRouter(AuthCubit authCubit) {
             builder: (_, _) => const HomeScreen(),
           ),
           GoRoute(
-            path: '/daily',
-            builder: (_, _) => const DailyScreen(),
-          ),
-          GoRoute(
-            path: '/monthly',
-            builder: (_, _) => const MonthlyScreen(),
+            path: '/bookings',
+            builder: (_, _) => const BookingsScreen(),
           ),
           GoRoute(
             path: '/reports',
@@ -200,12 +195,8 @@ class HomeShell extends StatelessWidget {
                 label: 'Home',
               ),
               const BottomNavigationBarItem(
-                icon: Icon(Icons.calendar_today),
-                label: 'Daily',
-              ),
-              const BottomNavigationBarItem(
                 icon: Icon(Icons.calendar_month),
-                label: 'Monthly',
+                label: 'Bookings',
               ),
               const BottomNavigationBarItem(
                 icon: Icon(Icons.bar_chart_rounded),
@@ -225,15 +216,16 @@ class HomeShell extends StatelessWidget {
 
   int _indexFromLocation(String location, bool isOwner) {
     if (location.startsWith('/home')) return 0;
-    if (location.startsWith('/daily')) return 1;
-    if (location.startsWith('/monthly')) return 2;
-    if (location.startsWith('/reports')) return 3;
-    if (isOwner && location.startsWith('/settings')) return 4;
-    return 1;
+    if (location.startsWith('/bookings') ||
+        location.startsWith('/daily') ||
+        location.startsWith('/monthly')) return 1;
+    if (location.startsWith('/reports')) return 2;
+    if (isOwner && location.startsWith('/settings')) return 3;
+    return 0;
   }
 
   void _onTap(BuildContext context, int index, bool isOwner) {
-    final paths = ['/home', '/daily', '/monthly', '/reports'];
+    final paths = ['/home', '/bookings', '/reports'];
     if (isOwner) paths.add('/settings');
     if (index < paths.length) context.go(paths[index]);
   }
