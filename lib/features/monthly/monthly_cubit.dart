@@ -68,13 +68,15 @@ class MonthlyCubit extends Cubit<MonthlyState> {
   }
 
   /// Fetch the full booking group for an edit tap in the day-detail card.
+  /// Uses [bookingGroupId] directly so the correct booking is returned even
+  /// when a room has multiple bookings on the same date (day-use + night).
   /// Emits [MonthlyGroupFetched] (transient) then re-emits the previous
   /// [MonthlyLoaded] so the calendar stays visible while the sheet is open.
-  Future<void> fetchGroupForDay(String roomId, DateTime date) async {
+  Future<void> fetchGroupForDay(String bookingGroupId) async {
     final previous = state;
     if (previous is! MonthlyLoaded) return;
     try {
-      final group = await _repository.fetchGroupByDay(roomId, date);
+      final group = await _repository.fetchGroupByGroupId(bookingGroupId);
       if (isClosed) return;
       emit(MonthlyGroupFetched(group: group, previous: previous));
       emit(previous);
@@ -126,6 +128,7 @@ class MonthlyCubit extends Cubit<MonthlyState> {
         return DayRoomRow(
           roomId: row.roomId,
           roomName: room.name,
+          bookingGroupId: row.bookingGroupId,
           perNightAmount: row.amount,
           paymentReceived: row.paymentReceived,
           sourceName: row.bookingSourceName,
@@ -140,10 +143,14 @@ class MonthlyCubit extends Cubit<MonthlyState> {
           return ia.compareTo(ib);
         });
 
+      // bookedCount = unique rooms occupied (a room with day-use + night stay
+      // has 2 rows but is only 1 occupied room for occupancy purposes)
+      final uniqueOccupiedRooms = rows.map((r) => r.roomId).toSet().length;
+
       dayStats[day] = DayStats(
         date: DateTime(year, month, day),
         revenue: revenue,
-        bookedCount: rows.length, // unique per room per day via DB constraint
+        bookedCount: uniqueOccupiedRooms,
         totalRooms: totalRooms,
         rooms: roomRows,
       );

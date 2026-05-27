@@ -26,6 +26,8 @@ class BookingGroup extends Equatable {
     this.actualPaymentAmount,
     this.paymentReceivedDate,
     this.paymentNotes,
+    this.checkInDatetime,
+    this.checkOutDatetime,
   });
 
   final String id;
@@ -52,9 +54,17 @@ class BookingGroup extends Equatable {
   final double? actualPaymentAmount;
   final DateTime? paymentReceivedDate;
   final String? paymentNotes;
+  final DateTime? checkInDatetime;
+  final DateTime? checkOutDatetime;
 
   int get nights => checkOut.difference(checkIn).inDays;
   double get perNightAmount => nights > 0 ? totalAmount / nights : 0;
+
+  // True when check-in and check-out fall on the same calendar date (day-use booking).
+  bool get isDayUse =>
+      checkIn.year == checkOut.year &&
+      checkIn.month == checkOut.month &&
+      checkIn.day == checkOut.day;
 
   factory BookingGroup.fromJson(Map<String, dynamic> json) {
     final destMap = json['payment_destinations'] as Map<String, dynamic>?;
@@ -95,6 +105,12 @@ class BookingGroup extends Equatable {
           ? DateTime.parse(json['payment_received_date'] as String)
           : null,
       paymentNotes: json['payment_notes'] as String?,
+      checkInDatetime: json['check_in_datetime'] != null
+          ? DateTime.parse(json['check_in_datetime'] as String).toLocal()
+          : null,
+      checkOutDatetime: json['check_out_datetime'] != null
+          ? DateTime.parse(json['check_out_datetime'] as String).toLocal()
+          : null,
     );
   }
 
@@ -124,5 +140,7 @@ class BookingGroup extends Equatable {
         actualPaymentAmount,
         paymentReceivedDate,
         paymentNotes,
+        checkInDatetime,
+        checkOutDatetime,
       ];
 }

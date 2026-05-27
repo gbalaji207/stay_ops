@@ -27,20 +27,18 @@ class MonthlyRepository {
         .toList();
   }
 
-  Future<BookingGroup> fetchGroupByDay(String roomId, DateTime date) async {
-    final rows = await _client
-        .from('booking_days')
-        .select('booking_groups!inner(*)')
-        .eq('room_id', roomId)
-        .eq('booking_date', _fmt(date))
+  /// Fetches a booking group by its ID. Used when tapping a row in the monthly
+  /// day-detail panel — since a room can have multiple bookings per day (day-use
+  /// + night), we fetch by the known bookingGroupId rather than (roomId, date).
+  Future<BookingGroup> fetchGroupByGroupId(String groupId) async {
+    final row = await _client
+        .from('booking_groups')
+        .select('*')
+        .eq('id', groupId)
+        .eq('property_id', AppConstants.propertyId)
         .eq('is_active', true)
-        .limit(1);
-
-    if ((rows as List).isEmpty) {
-      throw Exception('No active booking found for room on $date');
-    }
-    final groupMap = rows.first['booking_groups'] as Map<String, dynamic>;
-    return BookingGroup.fromJson(groupMap);
+        .single();
+    return BookingGroup.fromJson(row);
   }
 
   String _fmt(DateTime d) =>

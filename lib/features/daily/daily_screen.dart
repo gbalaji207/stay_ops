@@ -207,9 +207,11 @@ class _DailyScreenState extends State<DailyScreen> {
     final booked = rooms.where((r) => r.isBooked).toList();
     final revenue =
         booked.fold<double>(0, (sum, r) => sum + (r.perNightAmount ?? 0));
-    final occupiedCount = booked.length;
+    // Use unique room IDs — a room with day-use + night booking appears twice in the list
+    final totalRooms = rooms.map((r) => r.room.id).toSet().length;
+    final occupiedCount = booked.map((r) => r.room.id).toSet().length;
     final occupancyPct =
-        rooms.isEmpty ? 0 : (occupiedCount / rooms.length * 100).round();
+        totalRooms == 0 ? 0 : (occupiedCount / totalRooms * 100).round();
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
@@ -223,7 +225,7 @@ class _DailyScreenState extends State<DailyScreen> {
           const SizedBox(width: 8),
           _StatChip(
             label: 'Occupied',
-            value: '$occupiedCount / ${rooms.length}',
+            value: '$occupiedCount / $totalRooms',
             colors: colors,
           ),
           const SizedBox(width: 8),
@@ -256,7 +258,7 @@ class _DailyScreenState extends State<DailyScreen> {
           status: status,
           onTap: () => context
               .read<DailyCubit>()
-              .fetchGroupForDay(status.room.id, _selectedDate),
+              .fetchGroupForDay(status.bookingGroupId!),
         ),
       );
     }
@@ -339,11 +341,19 @@ class _BookedCard extends StatelessWidget {
 
   static final _amtFmt = NumberFormat('#,##0.##');
 
+  /// "May 27 · Day Use"            (same-date / day-use booking)
   /// "May 13 → 16 · 3 nights"  (same month)
   /// "May 31 → Jun 1 · 1 night" (cross-month)
   static String _dateRange(DateTime checkIn, DateTime checkOut, int nights) {
+    final isSameDay = checkIn.year == checkOut.year &&
+        checkIn.month == checkOut.month &&
+        checkIn.day == checkOut.day;
+    if (isSameDay) {
+      return '${DateFormat('MMM d').format(checkIn)} · Day Use';
+    }
     final inFmt = DateFormat('MMM d');
-    final outSameMonth = checkIn.month == checkOut.month;
+    final outSameMonth = checkIn.month == checkOut.month &&
+        checkIn.year == checkOut.year;
     final outStr = outSameMonth
         ? DateFormat('d').format(checkOut)
         : DateFormat('MMM d').format(checkOut);

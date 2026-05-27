@@ -67,10 +67,15 @@ class _BookingWizardScreenState extends State<BookingWizardScreen> {
 
     _selectedRoomId = group?.roomId ?? sf?.roomId ?? extras.prefilledRoomId;
     _bookingDate = group?.bookingDate ?? sf?.bookingDate ?? DateTime.now();
-    _checkIn = group?.checkIn ?? sf?.checkIn ?? extras.prefilledDate ?? _today();
-    _checkOut = group?.checkOut ??
-        sf?.checkOut ??
+
+    // Check-in / check-out carry full datetimes.
+    // Prefer stored TIMESTAMPTZ; fall back to date + hotel defaults (12:00 / 11:00).
+    final baseIn  = group?.checkIn  ?? sf?.checkIn  ?? extras.prefilledDate ?? _today();
+    final baseOut = group?.checkOut ?? sf?.checkOut ??
         (extras.prefilledDate ?? _today()).add(const Duration(days: 1));
+    _checkIn  = group?.checkInDatetime  ?? _withTime(baseIn,  12);
+    _checkOut = group?.checkOutDatetime ?? _withTime(baseOut, 11);
+
     _bookingTypeId = group?.bookingTypeId ?? sf?.bookingTypeId;
     _bookingSourceId = group?.bookingSourceId ?? sf?.bookingSourceId;
     _paymentReceived = group?.paymentReceived ?? false;
@@ -151,6 +156,10 @@ class _BookingWizardScreenState extends State<BookingWizardScreen> {
     final now = DateTime.now();
     return DateTime(now.year, now.month, now.day);
   }
+
+  /// Returns [date] with its time component replaced by [hour]:[minute].
+  static DateTime _withTime(DateTime date, int hour, [int minute = 0]) =>
+      DateTime(date.year, date.month, date.day, hour, minute);
 
   String _fmtAmount(double v) {
     if (v == v.truncateToDouble()) return v.toInt().toString();
@@ -411,10 +420,8 @@ class _BookingWizardScreenState extends State<BookingWizardScreen> {
                   otaBookingIdController: _otaBookingIdController,
                   onBookingDateChanged: (date) =>
                       setState(() => _bookingDate = date),
-                  onStayRangeChanged: (start, end) => setState(() {
-                    _checkIn = start;
-                    _checkOut = end;
-                  }),
+                  onCheckInChanged:  (dt) => setState(() => _checkIn  = dt),
+                  onCheckOutChanged: (dt) => setState(() => _checkOut = dt),
                   onTypeSelected: (id) => setState(() {
                     _bookingTypeId = id;
                     _bookingSourceId = null;
@@ -452,10 +459,8 @@ class _BookingWizardScreenState extends State<BookingWizardScreen> {
                   onRoomChanged: (id) => setState(() => _selectedRoomId = id),
                   onBookingDateChanged: (date) =>
                       setState(() => _bookingDate = date),
-                  onStayRangeChanged: (start, end) => setState(() {
-                    _checkIn = start;
-                    _checkOut = end;
-                  }),
+                  onCheckInChanged:  (dt) => setState(() => _checkIn  = dt),
+                  onCheckOutChanged: (dt) => setState(() => _checkOut = dt),
                   onTypeSelected: (id) => setState(() {
                     _bookingTypeId = id;
                     _bookingSourceId = null;

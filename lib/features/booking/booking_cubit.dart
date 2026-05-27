@@ -17,7 +17,8 @@ class BookingCubit extends Cubit<BookingState> {
     try {
       final conflicts = await _repository.checkConflicts(
         input.roomId,
-        input.nights,
+        input.checkInDatetime,
+        input.checkOutDatetime,
         excludeGroupId: input.existingGroupId, // null for new bookings
       );
       if (isClosed) return;
@@ -39,7 +40,9 @@ class BookingCubit extends Cubit<BookingState> {
     if (isClosed) return;
     emit(const BookingSaving());
     try {
-      await _repository.softDeleteConflicts(input.roomId, input.nights);
+      final conflictGroupIds =
+          current.conflicts.map((c) => c.groupId).toList();
+      await _repository.softDeleteConflicts(conflictGroupIds);
       await _executeSave(input);
     } catch (e) {
       if (isClosed) return;

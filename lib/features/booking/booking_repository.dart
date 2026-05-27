@@ -5,36 +5,79 @@ import '../../shared/models/booking_group.dart';
 import 'booking_group_input.dart';
 
 class ConflictInfo {
-  const ConflictInfo({required this.date, required this.roomName});
-  final DateTime date;
+  const ConflictInfo({
+    required this.groupId,
+    required this.checkIn,
+    required this.checkOut,
+    this.checkInDatetime,
+    this.checkOutDatetime,
+    required this.roomName,
+    this.bookingTypeName,
+    this.bookingSourceName,
+    this.customerName,
+  });
+
+  /// ID of the conflicting booking_group — used by confirmOverwrite to soft-delete it.
+  final String groupId;
+  final DateTime checkIn;
+  final DateTime checkOut;
+  /// Local datetimes — used to display times for day-use conflicts.
+  final DateTime? checkInDatetime;
+  final DateTime? checkOutDatetime;
   final String roomName;
+  final String? bookingTypeName;
+  final String? bookingSourceName;
+  final String? customerName;
 }
 
 class BookingRepository {
   final _client = Supabase.instance.client;
 
+  /// Checks for time-range overlap on booking_groups for the same room.
+  /// Two bookings conflict when:
+  ///   existing.check_in_datetime  < new.checkOutDatetime  AND
+  ///   existing.check_out_datetime > new.checkInDatetime
   Future<List<ConflictInfo>> checkConflicts(
     String roomId,
-    List<DateTime> nights, {
+    DateTime checkInDatetime,
+    DateTime checkOutDatetime, {
     String? excludeGroupId,
   }) async {
-    if (nights.isEmpty) return [];
-    final dates = nights.map(_fmt).toList();
     var query = _client
-        .from('booking_days')
-        .select('booking_date, booking_group_id, rooms(name)')
+        .from('booking_groups')
+        .select(
+          'id, check_in, check_out, check_in_datetime, check_out_datetime, '
+          'customer_name, rooms!inner(name), booking_types(name), booking_sources(name)',
+        )
         .eq('room_id', roomId)
-        .inFilter('booking_date', dates)
-        .eq('is_active', true);
+        .eq('property_id', AppConstants.propertyId)
+        .eq('is_active', true)
+        .lt('check_in_datetime', checkOutDatetime.toUtc().toIso8601String())
+        .gt('check_out_datetime', checkInDatetime.toUtc().toIso8601String());
+
     if (excludeGroupId != null) {
-      query = query.neq('booking_group_id', excludeGroupId);
+      query = query.neq('id', excludeGroupId);
     }
+
     final rows = await query;
     return (rows as List).map((row) {
       final roomMap = row['rooms'] as Map<String, dynamic>;
       return ConflictInfo(
-        date: DateTime.parse(row['booking_date'] as String),
+        groupId: row['id'] as String,
+        checkIn: DateTime.parse(row['check_in'] as String),
+        checkOut: DateTime.parse(row['check_out'] as String),
+        checkInDatetime: row['check_in_datetime'] != null
+            ? DateTime.parse(row['check_in_datetime'] as String).toLocal()
+            : null,
+        checkOutDatetime: row['check_out_datetime'] != null
+            ? DateTime.parse(row['check_out_datetime'] as String).toLocal()
+            : null,
         roomName: roomMap['name'] as String,
+        bookingTypeName:
+            (row['booking_types'] as Map<String, dynamic>?)?['name'] as String?,
+        bookingSourceName:
+            (row['booking_sources'] as Map<String, dynamic>?)?['name'] as String?,
+        customerName: row['customer_name'] as String?,
       );
     }).toList();
   }
@@ -45,6 +88,8 @@ class BookingRepository {
       'room_id': input.roomId,
       'check_in': _fmt(input.checkIn),
       'check_out': _fmt(input.checkOut),
+      'check_in_datetime': input.checkInDatetime.toUtc().toIso8601String(),
+      'check_out_datetime': input.checkOutDatetime.toUtc().toIso8601String(),
       'total_amount': input.totalAmount,
       'payment_received': input.paymentReceived,
       'booking_date': input.bookingDate?.toIso8601String(),
@@ -76,45 +121,19 @@ class BookingRepository {
     await _client.from('booking_days').insert(daysPayload);
   }
 
-  Future<void> softDeleteConflicts(
-      String roomId, List<DateTime> dates) async {
-    if (dates.isEmpty) return;
-    final formattedDates = dates.map(_fmt).toList();
-
-    // Find which group IDs are affected before deleting
-    final conflictRows = await _client
-        .from('booking_days')
-        .select('booking_group_id')
-        .eq('room_id', roomId)
-        .inFilter('booking_date', formattedDates)
-        .eq('is_active', true);
-
-    final groupIds = (conflictRows as List)
-        .map((r) => r['booking_group_id'] as String)
-        .toSet()
-        .toList();
-
-    // Soft-delete the conflict booking_days
-    await _client
-        .from('booking_days')
-        .update({'is_active': false})
-        .eq('room_id', roomId)
-        .inFilter('booking_date', formattedDates)
-        .eq('is_active', true);
-
-    // Cascade: soft-delete parent groups that now have no active days
+  /// Soft-deletes conflicting booking groups (and their booking_days) by group ID.
+  /// Called when the user confirms overwriting detected conflicts.
+  Future<void> softDeleteConflicts(List<String> groupIds) async {
+    if (groupIds.isEmpty) return;
     for (final groupId in groupIds) {
-      final activeDays = await _client
+      await _client
           .from('booking_days')
-          .select('id')
-          .eq('booking_group_id', groupId)
-          .eq('is_active', true);
-      if ((activeDays as List).isEmpty) {
-        await _client
-            .from('booking_groups')
-            .update({'is_active': false})
-            .eq('id', groupId);
-      }
+          .update({'is_active': false})
+          .eq('booking_group_id', groupId);
+      await _client
+          .from('booking_groups')
+          .update({'is_active': false})
+          .eq('id', groupId);
     }
   }
 
@@ -164,6 +183,8 @@ class BookingRepository {
     await _client.from('booking_groups').update({
       'check_in': _fmt(input.checkIn),
       'check_out': _fmt(input.checkOut),
+      'check_in_datetime': input.checkInDatetime.toUtc().toIso8601String(),
+      'check_out_datetime': input.checkOutDatetime.toUtc().toIso8601String(),
       'total_amount': input.totalAmount,
       'payment_received': input.paymentReceived,
       'booking_date': input.bookingDate?.toIso8601String(),

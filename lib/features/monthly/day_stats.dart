@@ -4,6 +4,7 @@ class DayRoomRow extends Equatable {
   const DayRoomRow({
     required this.roomId,
     required this.roomName,
+    required this.bookingGroupId,
     required this.perNightAmount,
     required this.paymentReceived,
     this.sourceName,
@@ -12,13 +13,14 @@ class DayRoomRow extends Equatable {
 
   final String roomId;
   final String roomName;
+  final String bookingGroupId;
   final double perNightAmount;
   final bool paymentReceived;
   final String? sourceName;
   final String? typeName;
 
   @override
-  List<Object?> get props => [roomId, roomName, perNightAmount, paymentReceived, sourceName, typeName];
+  List<Object?> get props => [roomId, roomName, bookingGroupId, perNightAmount, paymentReceived, sourceName, typeName];
 }
 
 class DayStats extends Equatable {

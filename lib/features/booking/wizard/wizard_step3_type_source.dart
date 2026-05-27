@@ -26,10 +26,21 @@ class WizardStep3Payment extends StatelessWidget {
 
   static final _amountFmt = NumberFormat('#,##0.##');
 
-  int get _nightCount => checkOut.difference(checkIn).inDays;
+  int get _nightCount {
+    final inDate  = DateTime(checkIn.year,  checkIn.month,  checkIn.day);
+    final outDate = DateTime(checkOut.year, checkOut.month, checkOut.day);
+    return outDate.difference(inDate).inDays;
+  }
+
+  bool get _isSameDay =>
+      checkIn.year  == checkOut.year  &&
+      checkIn.month == checkOut.month &&
+      checkIn.day   == checkOut.day;
+
+  int get _slotCount => _isSameDay ? 1 : _nightCount;
   double get _grossAmount =>
       double.tryParse(grossAmountController.text.replaceAll(',', '')) ?? 0;
-  double get _perNight => _nightCount > 0 ? _grossAmount / _nightCount : 0;
+  double get _perNight => _grossAmount / _slotCount;
   double get _commissionAmount =>
       double.tryParse(commissionController.text.replaceAll(',', '')) ?? 0;
   double get _tdsTcsAmount =>
@@ -64,7 +75,7 @@ class WizardStep3Payment extends StatelessWidget {
                   fontSize: 15,
                 ),
               ),
-              if (_grossAmount > 0 && _nightCount > 0) ...[
+              if (_grossAmount > 0) ...[
                 const SizedBox(width: 10),
                 Container(
                   padding: const EdgeInsets.symmetric(
@@ -76,7 +87,9 @@ class WizardStep3Payment extends StatelessWidget {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
-                    '₹${_amountFmt.format(_perNight)} / night',
+                    _isSameDay
+                        ? '₹${_amountFmt.format(_perNight)} / use'
+                        : '₹${_amountFmt.format(_perNight)} / night',
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w500,

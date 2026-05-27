@@ -400,7 +400,7 @@ class _MonthlyScreenState extends State<MonthlyScreen> {
         ),
         child: stats == null || stats.rooms.isEmpty
             ? _buildEmptyDetailState(dateLabel, colors)
-            : _buildDetailRows(context, state, stats, dateLabel, date, colors),
+            : _buildDetailRows(context, state, stats, dateLabel, colors),
       ),
     );
   }
@@ -423,7 +423,6 @@ class _MonthlyScreenState extends State<MonthlyScreen> {
     MonthlyLoaded state,
     DayStats stats,
     String dateLabel,
-    DateTime date,
     AppColors colors,
   ) {
     return Column(
@@ -459,7 +458,7 @@ class _MonthlyScreenState extends State<MonthlyScreen> {
             colors: colors,
             onTap: () => context
                 .read<MonthlyCubit>()
-                .fetchGroupForDay(row.roomId, date),
+                .fetchGroupForDay(row.bookingGroupId),
           ),
         ),
       ],

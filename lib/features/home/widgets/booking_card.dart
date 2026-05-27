@@ -20,21 +20,34 @@ class BookingCard extends StatelessWidget {
 
   static final _amtFmt = NumberFormat('#,##0.##');
 
-  static String _dateRange(DateTime checkIn, DateTime checkOut, int nights) {
+  static String _dateRange(BookingGroup group) {
+    if (group.isDayUse) {
+      final d = DateFormat('MMM d').format(group.checkIn);
+      final inDt = group.checkInDatetime;
+      final outDt = group.checkOutDatetime;
+      if (inDt != null && outDt != null) {
+        final inT =
+            '${inDt.hour.toString().padLeft(2, '0')}:${inDt.minute.toString().padLeft(2, '0')}';
+        final outT =
+            '${outDt.hour.toString().padLeft(2, '0')}:${outDt.minute.toString().padLeft(2, '0')}';
+        return '$d · Day Use · $inT – $outT';
+      }
+      return '$d · Day Use';
+    }
+    final nights = group.nights;
     final inFmt = DateFormat('MMM d');
-    final sameMonth = checkIn.month == checkOut.month &&
-        checkIn.year == checkOut.year;
+    final sameMonth = group.checkIn.month == group.checkOut.month &&
+        group.checkIn.year == group.checkOut.year;
     final outStr = sameMonth
-        ? DateFormat('d').format(checkOut)
-        : DateFormat('MMM d').format(checkOut);
+        ? DateFormat('d').format(group.checkOut)
+        : DateFormat('MMM d').format(group.checkOut);
     final label = nights == 1 ? 'night' : 'nights';
-    return '${inFmt.format(checkIn)} → $outStr · $nights $label';
+    return '${inFmt.format(group.checkIn)} → $outStr · $nights $label';
   }
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).extension<AppColors>()!;
-    final nights = group.nights;
     final paid = group.paymentReceived;
 
     return GestureDetector(
@@ -76,7 +89,7 @@ class BookingCard extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(
-                    _dateRange(group.checkIn, group.checkOut, nights),
+                    _dateRange(group),
                     style: TextStyle(
                       fontSize: 11,
                       color: colors.textSecondary,

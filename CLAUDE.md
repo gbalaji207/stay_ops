@@ -177,7 +177,10 @@ Settings tab (and Reports tab for staff) are **fully absent from the widget tree
 
 These are non-obvious and critical to get right:
 
-- **Night count:** `check_out − check_in`. `check_out` is the departure day (exclusive). Single night: `check_in=May 13, check_out=May 14`.
+- **Night count:** `check_out − check_in` using **calendar dates only** — always strip time before calling `.difference().inDays` (23 h difference = 0 inDays). `check_out` is the departure day (exclusive). Single night: `check_in=May 13, check_out=May 14`.
+- **Day-use bookings:** when `check_in` and `check_out` share the same calendar date (year/month/day equality), the booking is a day-use. `nightCount` = 1, `isDayUse = true`, and exactly one `booking_days` row is created for that date. Detected automatically — no `slot_type` column anywhere.
+- **`check_in_datetime` / `check_out_datetime`** (`TIMESTAMPTZ`) on `booking_groups` carry the full timestamps used for overlap-based conflict detection. For night stays the defaults are 14:00 check-in / 11:00 check-out (applied in `BookingGroupInput`). For day-use, the user picks both times explicitly in the wizard. Stored as UTC; parse back with `.toLocal()` for display.
+- **`booking_days` unique index:** `booking_days_group_date_unique` on `(booking_group_id, booking_date) WHERE is_active`. The old per-room-per-date index (`booking_days_active_unique`) was dropped — multiple groups on the same room+date are allowed as long as their datetime ranges don't overlap.
 - **`total_amount`** on `booking_groups` is the gross amount — source of truth for the booking value.
 - **`net_amount`** on `booking_groups` is stored (`NUMERIC(10,2)`). It equals `totalAmount − (commissionInclTax ?? 0) − (taxDeduction ?? 0)` for manually-entered bookings. For SF-imported bookings it is the value returned directly by the SF edge function (`net_amount` field), which may differ from the local formula. `BookingGroup.fromJson` falls back to the formula for rows that predate the column.
 - **`booking_days.amount`** (per-night) stores **net per night** = `netAmount / nights`. It is computed by `BookingGroupInput.perNightAmount` at save/update time — never re-read for display.
@@ -190,10 +193,21 @@ These are non-obvious and critical to get right:
 
 ## Conflict Detection Flow
 
-Before every save, query active `booking_days` for the target room + night dates. If conflicts exist:
-1. Emit `BookingConflict` → show `ConflictDialog` (lists conflicting dates)
+Before every save, `BookingRepository.checkConflicts()` queries `booking_groups` for **datetime-range overlap** on the same room. Two bookings conflict when:
+
+```
+existing.check_in_datetime  < new.checkOutDatetime  AND
+existing.check_out_datetime > new.checkInDatetime
+```
+
+This allows multiple bookings per room on the same calendar date as long as their time ranges don't overlap (e.g. a morning day-use 08:00–12:00 and an afternoon day-use 14:00–18:00 can coexist).
+
+`ConflictInfo` carries: `groupId`, `checkIn`/`checkOut` (date), `checkInDatetime`/`checkOutDatetime` (local, for time display), `roomName`, `bookingTypeName`, `bookingSourceName`, `customerName`. The dialog shows all of these.
+
+If conflicts exist:
+1. Emit `BookingConflict` → show `ConflictDialog`
 2. User cancels → emit `BookingIdle`, stay on form
-3. User confirms → soft-delete conflicting `booking_days` (and their parent `booking_groups` if all days inactive) → insert new group
+3. User confirms → `softDeleteConflicts(List<String> groupIds)` soft-deletes each conflicting group and its `booking_days` → insert new group
 
 ```
 BookingIdle → BookingChecking → BookingConflict → (cancel) BookingIdle
@@ -225,7 +239,15 @@ SELECT booking_groups.* FROM booking_groups
 JOIN booking_days ON booking_days.booking_group_id = booking_groups.id
 WHERE booking_days.room_id = :roomId AND booking_days.booking_date = :date AND booking_days.is_active = true
 
-# Save: POST /booking_groups (includes net_amount) → get id → POST /booking_days (array, one per night, amount = net per night)
+# Conflict check (datetime overlap on booking_groups — NOT booking_days dates)
+GET /booking_groups?room_id=eq.<id>&property_id=eq.<pid>&is_active=eq.true
+  &check_in_datetime=lt.<newCheckOutUtc>&check_out_datetime=gt.<newCheckInUtc>
+  &select=id,check_in,check_out,check_in_datetime,check_out_datetime,customer_name,
+          rooms!inner(name),booking_types(name),booking_sources(name)
+  (optionally &id=neq.<excludeGroupId> when editing)
+
+# Save: POST /booking_groups (includes check_in_datetime, check_out_datetime, net_amount)
+#   → get id → POST /booking_days (array, one per night, amount = net per night)
 
 # Edit update sequence:
 PATCH /booking_groups?id=eq.<id>          -- update metadata including net_amount
@@ -307,6 +329,7 @@ All booking entry and editing goes through the unified 4-step wizard at `/bookin
 
 Steps: 1 = Room (`wizard_step1_room.dart`), 2 = Dates + Guest + Type/Source (`wizard_step2_dates.dart` → class `WizardStep2Details`), 3 = Payment amounts (`wizard_step3_type_source.dart` → class `WizardStep3Payment`), 4 = Review + Save (`wizard_step4_review.dart`).
 
+- Step 4 is a `StatefulWidget`. The **BOOKING** section (room + dates) is always expanded. **BOOKING DETAILS** (type, source, customer, OTA IDs) and **PAYMENT** (amounts) are accordion sections — collapsed by default showing a one-line read-only summary, expandable via a chevron header. Uses `AnimatedCrossFade` with `sizeCurve: Curves.easeInOut`. Each accordion's `secondChild` starts with `SizedBox(height: 8)` to prevent `ClipRect` from cutting off floating label tops.
 - Step 4 save button: disabled when `grossAmount == 0` OR `checkOut <= checkIn`.
 - Booking source dropdown: filtered by selected type. **Hidden entirely** if selected type has no active sources.
 - Payment destination: auto-filled from source's `defaultPaymentDestinationId` when source is changed; always shown.
