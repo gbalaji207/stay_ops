@@ -48,7 +48,8 @@ lib/
 │   │   ├── wizard/   # booking_wizard_screen, wizard_step1–4, booking_wizard_extras,
 │   │   │             # sf_booking_prefill, booking_group_input
 │   │   └── widgets/  # stay_flexi_search_dialog
-│   ├── daily/        # daily_screen, daily_cubit, daily_repository, room_day_status, day_booking_row
+│   ├── daily/        # daily_screen (calendar grid), daily_cubit, daily_repository,
+│   │                 # calendar_booking, room_day_status, day_booking_row
 │   ├── home/
 │   │   ├── cubit/        # home_cubit, home_state
 │   │   ├── repository/   # home_repository
@@ -131,7 +132,7 @@ pin_properties (pin_id FK, property_id FK, sort_order INT)  -- many-to-many
 | `AuthCubit` | App-level | PIN verification, role, property list + active property, session |
 | `ConfigCubit` | App-level | Rooms + types + sources + destinations for the **active property**. Loaded/reloaded on every `AuthAuthenticated` emission. **Must be provided at app root.** |
 | `BookingCubit` | Feature | Save/edit/conflict check |
-| `DailyCubit` | Feature | Daily room status + fetch group by day |
+| `DailyCubit` | Feature | Calendar timeline — `loadRange(anchor, visibleDays, rooms, sources)` emits `DailyRangeLoaded`; `fetchGroupForDay(bookingGroupId)` emits transient `DailyGroupFetched` then re-emits previous |
 | `MonthlyCubit` | Feature | Month bookings + heatmap stats |
 | `ReportsCubit` | Feature | Payment, Type, and Source report aggregation (client-side grouping via shared `_aggregateCategory` helper) |
 | `SettingsCubit` | Feature | Config CRUD. After every write → call `ConfigCubit.reload()`. |
@@ -225,10 +226,16 @@ Always apply both filters on every query — without exception:
 Key queries:
 
 ```
-# Daily view
+# Daily single-day view (legacy — DailyLoaded state)
 GET /booking_days?property_id=eq.<id>&booking_date=eq.<date>&is_active=eq.true
   &select=*,booking_groups!inner(*,booking_types(*),booking_sources(*)),rooms(*)
   &booking_groups.is_active=eq.true
+
+# Calendar range view — DailyCubit.loadRange / fetchRangeBookings (DailyRangeLoaded)
+GET /booking_days?property_id=eq.<id>&booking_date=gte.<start>&booking_date=lte.<end>&is_active=eq.true
+  &select=*,booking_groups!inner(*,booking_types(*),booking_sources(*)),rooms(*)
+  De-duplicated client-side by bookingGroupId → one CalendarBooking per booking group.
+  check_in_datetime / check_out_datetime on booking_groups drive sub-column positioning.
 
 # Monthly view (add &room_id=eq.<id> for room filter)
 GET /booking_days?property_id=eq.<id>&booking_date=gte.<start>&booking_date=lte.<end>&is_active=eq.true
@@ -408,6 +415,69 @@ Booking Type Report (`/reports/booking-type`) and Booking Source Report (`/repor
 The `_aggregateCategory` private method in `ReportsCubit` handles grouping for both table reports. Payment report uses the same counting approach inside `loadPaymentReport`. All three methods track `Map<roomId, Map<categoryId?, Set<bookingGroupId>>>` to count unique groups per cell.
 
 **Do not use `firstWhere(orElse: () => null)` on `List rooms`** — at runtime it's `List<Room>` and `Null` is not a valid return type. Use `indexWhere` instead.
+
+---
+
+## Daily Calendar Timeline View (`/daily`)
+
+The daily screen is a **horizontal room × date grid** — not a single-day card list.
+
+### Layout
+```
+Scaffold → SafeArea → Column
+  _CalendarHeader   ← "Daily" title + prev/next arrows + date-range label (DatePicker tap)
+  header Row        ← "Rooms" label + day column headers (_DayHeader)
+  Divider
+  Expanded → Stack
+    SingleChildScrollView → _CalendarGrid   ← scrollable room rows
+    loading overlay (translucent + spinner, only while reloading)
+```
+
+### Responsive columns
+`MediaQuery.of(context).size.width < 600 ? 3 : 7` — 3-day view on phone, 7-day on tablet/desktop.
+
+### Key types
+
+| Type | File | Purpose |
+|---|---|---|
+| `CalendarBooking` | `calendar_booking.dart` | De-duplicated per `bookingGroupId`. Holds midnight `checkIn`/`checkOut` dates AND optional full-time `checkInDatetime`/`checkOutDatetime` (local). |
+| `DailyRangeLoaded` | `daily_state.dart` | Emitted by `loadRange`. Carries `anchorDate`, `visibleDays`, active `rooms`, and the de-duped `bookings` list. |
+| `DailyGroupFetched` | `daily_state.dart` | Transient — carries the fetched `BookingGroup` + the `previous` state. Cubit immediately re-emits `previous` so `BlocBuilder` never blanks. `BlocListener` uses it to open the edit wizard. |
+
+### BlocProvider scoping
+`DailyScreen.build` creates the `BlocProvider` AND immediately calls `cubit.loadRange(...)` on the returned cubit reference — **never** via `ctx.read<DailyCubit>()` because `ctx` is the parent context (above the BlocProvider).
+
+### Lane algorithm (`_CalendarGrid._computeLanes`)
+Bookings for the same room are grouped into horizontal lanes so time-overlapping ones don't collide. Overlap uses **datetime precision** when `checkInDatetime`/`checkOutDatetime` are present:
+```dart
+return aDt.isBefore(bEnd) && bDt.isBefore(aEnd);   // exclusive-end
+```
+Falls back to date-level overlap for legacy rows. Non-overlapping same-day bookings (e.g. 08:00–12:00 and 14:00–18:00) are placed in the **same lane** and render side-by-side.
+
+### Time-proportional chip positioning (`_RoomRow._positionedChip`)
+Each chip is a `Positioned` widget inside a `Stack`. Position is computed from the full local datetimes via:
+```dart
+static double _colFrac(DateTime localDt, DateTime anchorMidnight) =>
+    localDt.difference(anchorMidnight).inMinutes / (24.0 * 60.0);
+```
+`startFrac * colWidth` = left edge; `endFrac * colWidth` = right edge. `colWidth` comes from a `LayoutBuilder` wrapping the grid column. Chips with no datetimes fall back to whole-column spans.
+
+### Adaptive chip content (`_BookingSpan`)
+`chipWidth` (computed pixels) is passed to `_BookingSpan`. The Container always has `clipBehavior: Clip.hardEdge`. Content thresholds:
+- `< 22 px` → coloured bar only (no text)
+- `22–51 px` → customer name only
+- `≥ 52 px` → source logo + customer name
+
+### OTA source logo assets
+`assets/images/` contains `go-mmt.png`, `goibibo.png`, `agoda.png`, `airbnb.png`. The `_SourceAvatar` widget maps lower-cased `sourceName` to these assets, falling back to a 2-letter text badge.
+
+### Skeleton loading
+`_DailyScreenState` caches `_lastRangeState`. While `DailyLoading` is active the grid re-renders the last loaded state with a translucent overlay, so room rows and headers stay visible during navigation.
+
+### Date arithmetic rules
+- `anchorDate` is always **local midnight** (`DateTime(y, m, d)`) — never UTC.
+- `checkInDatetime` / `checkOutDatetime` on `CalendarBooking` are converted with `.toLocal()` in `loadRange` before storage.
+- `_colFrac` uses `inMinutes` (not `.inDays`) to avoid integer truncation across day boundaries.
 
 ---
 

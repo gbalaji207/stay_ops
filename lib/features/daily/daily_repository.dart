@@ -7,6 +7,29 @@ import 'day_booking_row.dart';
 class DailyRepository {
   final _client = Supabase.instance.client;
 
+  /// Fetches all booking_days rows whose [booking_date] falls in [start]..[end]
+  /// (both inclusive). Used by the calendar timeline view.
+  ///
+  /// A booking that started before [start] is still returned as long as it has
+  /// at least one active booking_days row in the range.
+  Future<List<DayBookingRow>> fetchRangeBookings(
+    DateTime start,
+    DateTime end,
+  ) async {
+    final rows = await _client
+        .from('booking_days')
+        .select(
+          '*, booking_groups!inner(*, booking_types(*), booking_sources(*)), rooms(*)',
+        )
+        .eq('property_id', AppConstants.propertyId)
+        .gte('booking_date', _fmt(start))
+        .lte('booking_date', _fmt(end))
+        .eq('is_active', true);
+    return (rows as List)
+        .map((r) => DayBookingRow.fromJson(r as Map<String, dynamic>))
+        .toList();
+  }
+
   Future<List<DayBookingRow>> fetchDayBookings(DateTime date) async {
     final rows = await _client
         .from('booking_days')
