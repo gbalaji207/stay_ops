@@ -108,7 +108,11 @@ class DailyCubit extends Cubit<DailyState> {
     emit(const DailyLoading());
     try {
       final endDate = anchorDate.add(Duration(days: visibleDays - 1));
-      final rows = await _repository.fetchRangeBookings(anchorDate, endDate);
+      // Extend one day back so bookings that check OUT on anchorDate are
+      // included: their last occupied night (checkOut-1) would otherwise fall
+      // outside [anchorDate, endDate] and never be fetched.
+      final queryStart = anchorDate.subtract(const Duration(days: 1));
+      final rows = await _repository.fetchRangeBookings(queryStart, endDate);
       final sourceById = {for (final s in allSources) s.id: s};
 
       // De-duplicate by bookingGroupId — a multi-night booking has one
