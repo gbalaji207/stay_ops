@@ -118,3 +118,53 @@ class BookingSourceReportError extends ReportsState {
   @override
   List<Object?> get props => [message];
 }
+
+class BookingsListReportLoading extends ReportsState {
+  const BookingsListReportLoading();
+
+  @override
+  List<Object?> get props => [];
+}
+
+class BookingsListReportLoaded extends ReportsState {
+  const BookingsListReportLoaded({
+    required this.dateRange,
+    required this.rows,
+    required this.roomFilter,
+    required this.bookingTypeFilter,
+    required this.bookingSourceFilter,
+    required this.paymentDestinationFilter,
+    required this.grandTotalGross,
+    required this.grandTotalNet,
+  });
+
+  final DateTimeRange dateRange;
+  final List<BookingReportRow> rows;
+  final List<String>? roomFilter;
+  final List<String>? bookingTypeFilter;
+  final List<String>? bookingSourceFilter;
+  final List<String>? paymentDestinationFilter;
+  final double grandTotalGross;
+  final double grandTotalNet;
+
+  @override
+  List<Object?> get props => [
+        dateRange,
+        rows,
+        roomFilter,
+        bookingTypeFilter,
+        bookingSourceFilter,
+        paymentDestinationFilter,
+        grandTotalGross,
+        grandTotalNet,
+      ];
+}
+
+class BookingsListReportError extends ReportsState {
+  const BookingsListReportError(this.message);
+
+  final String message;
+
+  @override
+  List<Object?> get props => [message];
+}

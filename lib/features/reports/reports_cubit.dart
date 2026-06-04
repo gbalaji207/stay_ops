@@ -2,6 +2,7 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../shared/models/booking_report_row.dart';
 import '../../shared/models/room_category_summary.dart';
 import '../../shared/models/room_payment_summary.dart';
 import 'reports_repository.dart';
@@ -186,6 +187,38 @@ class ReportsCubit extends Cubit<ReportsState> {
       ));
     } catch (e) {
       emit(BookingSourceReportError(e.toString()));
+    }
+  }
+
+  Future<void> loadBookingsListReport({
+    required DateTimeRange dateRange,
+    List<String>? roomIds,
+    List<String>? bookingTypeIds,
+    List<String>? bookingSourceIds,
+    List<String>? paymentDestinationIds,
+  }) async {
+    emit(const BookingsListReportLoading());
+    try {
+      final rows = await _repository.fetchBookingsReportRows(
+        dateFrom: dateRange.start,
+        dateTo: dateRange.end,
+        roomIds: roomIds,
+        bookingTypeIds: bookingTypeIds,
+        bookingSourceIds: bookingSourceIds,
+        paymentDestinationIds: paymentDestinationIds,
+      );
+      emit(BookingsListReportLoaded(
+        dateRange: dateRange,
+        rows: rows,
+        roomFilter: roomIds,
+        bookingTypeFilter: bookingTypeIds,
+        bookingSourceFilter: bookingSourceIds,
+        paymentDestinationFilter: paymentDestinationIds,
+        grandTotalGross: rows.fold(0.0, (s, r) => s + r.grossAmount),
+        grandTotalNet: rows.fold(0.0, (s, r) => s + r.netAmount),
+      ));
+    } catch (e) {
+      emit(BookingsListReportError(e.toString()));
     }
   }
 

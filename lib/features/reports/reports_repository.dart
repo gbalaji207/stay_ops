@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/constants.dart';
+import '../../shared/models/booking_report_row.dart';
 
 class RawReportRow {
   const RawReportRow({
@@ -162,6 +163,55 @@ class ReportsRepository {
         bookingGroupId: bg['id'] as String,
       );
     }).toList();
+  }
+
+  Future<List<BookingReportRow>> fetchBookingsReportRows({
+    required DateTime dateFrom,
+    required DateTime dateTo,
+    List<String>? roomIds,
+    List<String>? bookingTypeIds,
+    List<String>? bookingSourceIds,
+    List<String>? paymentDestinationIds,
+  }) async {
+    var query = _client
+        .from('booking_groups')
+        .select(
+          'id,booking_date,check_in,check_out,customer_name,'
+          'total_amount,tax_amount,commission_incl_tax,tax_deduction,net_amount,'
+          'payment_received,actual_payment_amount,payment_received_date,'
+          'payment_destination_id,'
+          'rooms(name),booking_types(name),booking_sources(name),'
+          'payment_destinations(name)',
+        )
+        .eq('property_id', AppConstants.propertyId)
+        .eq('is_active', true)
+        .eq('payment_received', true)
+        .gte('payment_received_date', _fmt(dateFrom))
+        .lte('payment_received_date', _fmt(dateTo));
+
+    if (roomIds != null && roomIds.isNotEmpty) {
+      query = query.inFilter('room_id', roomIds);
+    }
+    if (bookingTypeIds != null && bookingTypeIds.isNotEmpty) {
+      query = query.inFilter('booking_type_id', bookingTypeIds);
+    }
+    if (bookingSourceIds != null && bookingSourceIds.isNotEmpty) {
+      query = query.inFilter('booking_source_id', bookingSourceIds);
+    }
+    if (paymentDestinationIds != null && paymentDestinationIds.isNotEmpty) {
+      query = query.inFilter('payment_destination_id', paymentDestinationIds);
+    }
+
+    final rows = await query.order('check_in', ascending: true);
+    final result = (rows as List)
+        .map((r) => BookingReportRow.fromJson(r as Map<String, dynamic>))
+        .toList();
+    result.sort((a, b) {
+      final d = a.checkIn.compareTo(b.checkIn);
+      if (d != 0) return d;
+      return a.roomName.compareTo(b.roomName);
+    });
+    return result;
   }
 
   String _fmt(DateTime date) =>

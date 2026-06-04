@@ -50,6 +50,14 @@ class ReportsScreen extends StatelessWidget {
             colors: colors,
             onTap: () => context.push('/reports/booking-source'),
           ),
+          const SizedBox(height: 8),
+          _ReportCard(
+            icon: Icons.list_alt_outlined,
+            title: 'Bookings Report',
+            subtitle: 'All bookings with full financial detail',
+            colors: colors,
+            onTap: () => context.push('/reports/bookings'),
+          ),
         ],
       ),
     );

@@ -1,10 +1,17 @@
+import 'dart:convert';
+
+import 'package:file_selector/file_selector.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../shared/models/room_category_summary.dart';
 import '../config/config_cubit.dart';
+import '_web_download_stub.dart'
+    if (dart.library.html) '_web_download_web.dart';
 import 'reports_cubit.dart';
 import 'reports_repository.dart';
 
@@ -58,6 +65,76 @@ class _BookingSourceReportViewState extends State<_BookingSourceReportView> {
         );
   }
 
+  bool get _isDesktop =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.windows ||
+       defaultTargetPlatform == TargetPlatform.macOS ||
+       defaultTargetPlatform == TargetPlatform.linux);
+
+  Future<void> _exportCsv(BookingSourceReportLoaded state) async {
+    final dateFmt = DateFormat('yyyy-MM-dd');
+    final buf     = StringBuffer();
+
+    String esc(String? v) {
+      if (v == null || v.isEmpty) return '';
+      if (v.contains(',') || v.contains('"') || v.contains('\n')) {
+        return '"${v.replaceAll('"', '""')}"';
+      }
+      return v;
+    }
+
+    String fmtAmt(double v) => v.toStringAsFixed(2);
+
+    final cols = state.overallTotals;
+
+    buf.writeln([
+      'Room',
+      ...cols.map((c) => esc(c.categoryName ?? 'Not specified')),
+      'TOTAL',
+    ].join(','));
+
+    for (final room in state.roomRows) {
+      final byId = {for (final c in room.byCategory) c.categoryId: c.amount};
+      buf.writeln([
+        esc(room.roomName),
+        ...cols.map((c) {
+          final amt = byId[c.categoryId];
+          return amt != null ? fmtAmt(amt) : '';
+        }),
+        fmtAmt(room.roomTotal),
+      ].join(','));
+    }
+
+    buf.writeln([
+      'TOTAL',
+      ...cols.map((c) => fmtAmt(c.amount)),
+      fmtAmt(state.grandTotal),
+    ].join(','));
+
+    final bytes   = utf8.encode(buf.toString());
+    final dateStr = dateFmt.format(DateTime.now());
+    final fname   = 'booking_source_report_$dateStr.csv';
+
+    if (kIsWeb) {
+      triggerWebDownload(bytes, fname);
+    } else if (_isDesktop) {
+      final location = await getSaveLocation(
+        suggestedName: fname,
+        acceptedTypeGroups: [
+          const XTypeGroup(label: 'CSV files', extensions: ['csv']),
+        ],
+      );
+      if (location == null || !mounted) return;
+      await XFile.fromData(bytes, name: fname, mimeType: 'text/csv')
+          .saveTo(location.path);
+    } else {
+      await Share.shareXFiles(
+        [XFile.fromData(bytes, name: fname, mimeType: 'text/csv')],
+        subject: 'Booking Source Report $dateStr',
+      );
+    }
+  }
+
   Future<void> _pickDate(bool isFrom) async {
     final initial = isFrom ? _dateFrom : _dateTo;
     final picked = await showDatePicker(
@@ -97,6 +174,30 @@ class _BookingSourceReportViewState extends State<_BookingSourceReportView> {
             color: colors.textPrimary,
           ),
         ),
+        actions: [
+          Builder(
+            builder: (ctx) {
+              final st = ctx.watch<ReportsCubit>().state;
+              final loaded =
+                  st is BookingSourceReportLoaded && st.roomRows.isNotEmpty
+                      ? st
+                      : null;
+              return IconButton(
+                icon: Icon(
+                  (kIsWeb || _isDesktop)
+                      ? Icons.download_outlined
+                      : Icons.ios_share_outlined,
+                  color: loaded != null
+                      ? colors.textPrimary
+                      : colors.textHint,
+                ),
+                tooltip:
+                    (kIsWeb || _isDesktop) ? 'Download CSV' : 'Export CSV',
+                onPressed: loaded != null ? () => _exportCsv(loaded) : null,
+              );
+            },
+          ),
+        ],
       ),
       body: Column(
         children: [

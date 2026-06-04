@@ -13,6 +13,7 @@ import 'features/config/config_repository.dart';
 import 'features/daily/bookings_screen.dart';
 import 'features/reports/booking_source_report_screen.dart';
 import 'features/reports/booking_type_report_screen.dart';
+import 'features/reports/bookings_list_report_screen.dart';
 import 'features/reports/payment_report_screen.dart';
 import 'features/reports/reports_screen.dart';
 import 'features/settings/booking_source_config_screen.dart';
@@ -106,6 +107,10 @@ GoRouter _buildRouter(AuthCubit authCubit) {
           GoRoute(
             path: '/reports/booking-source',
             builder: (_, _) => const BookingSourceReportScreen(),
+          ),
+          GoRoute(
+            path: '/reports/bookings',
+            builder: (_, _) => const BookingsListReportScreen(),
           ),
           GoRoute(
             path: '/settings',
