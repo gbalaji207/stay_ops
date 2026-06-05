@@ -19,6 +19,7 @@ import 'features/reports/reports_screen.dart';
 import 'features/settings/booking_source_config_screen.dart';
 import 'features/settings/booking_type_config_screen.dart';
 import 'features/settings/payment_destination_config_screen.dart';
+import 'features/settings/channel_manager_token_screen.dart';
 import 'features/settings/room_config_screen.dart';
 import 'features/settings/settings_cubit.dart';
 import 'features/settings/settings_repository.dart';
@@ -155,6 +156,11 @@ GoRouter _buildRouter(AuthCubit authCubit) {
                   ),
                   child: const PaymentDestinationConfigScreen(),
                 ),
+              ),
+              GoRoute(
+                path: 'channel-manager',
+                builder: (context, _) =>
+                    const ChannelManagerTokenScreen(),
               ),
             ],
           ),

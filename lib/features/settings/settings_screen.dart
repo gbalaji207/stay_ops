@@ -85,6 +85,21 @@ class SettingsScreen extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 24),
+                _SectionHeader('Integrations', colors: colors),
+                const SizedBox(height: 8),
+                _ConfigSection(
+                  colors: colors,
+                  rows: [
+                    _ConfigRow(
+                      icon: Icons.token_outlined,
+                      label: 'Channel manager',
+                      subtitle: 'API token',
+                      onTap: () => context.go('/settings/channel-manager'),
+                      colors: colors,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
                 _SectionHeader('Session', colors: colors),
                 const SizedBox(height: 8),
                 _ConfigSection(
