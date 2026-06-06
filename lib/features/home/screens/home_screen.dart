@@ -1,25 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:intl/intl.dart';
-
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/models/booking_group.dart';
 import '../../../shared/models/payment_destination.dart';
 import '../../auth/auth_cubit.dart';
 import '../../booking/booking_repository.dart';
-import '../../booking/widgets/stay_flexi_search_dialog.dart';
 import '../../booking/wizard/booking_wizard_extras.dart';
-import '../../booking/wizard/sf_booking_prefill.dart';
 import '../../config/config_cubit.dart';
 import '../cubit/home_cubit.dart';
 import '../payment_update_extras.dart';
 import '../repository/home_repository.dart';
-import '../widgets/booking_card.dart';
-import '../widgets/new_booking_row.dart';
-import '../widgets/occupancy_strip.dart';
-import '../widgets/upcoming_card.dart';
+import '../widgets/ops_booking_card.dart';
+import '../../booking/widgets/stay_flexi_search_dialog.dart';
+import '../../booking/wizard/sf_booking_prefill.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -29,8 +25,11 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  late final DateTime _today;
+  late DateTime _today;
   bool _fabExpanded = false;
+  // Keeps the last successfully loaded state so we can show it under a
+  // translucent overlay while reloading (date switch, refresh, etc.)
+  HomeLoaded? _lastLoaded;
 
   @override
   void initState() {
@@ -39,21 +38,17 @@ class _HomeScreenState extends State<HomeScreen> {
     _today = DateTime(now.year, now.month, now.day);
   }
 
-  int _totalRooms() {
-    final config = context.read<ConfigCubit>().state;
-    return config is ConfigLoaded ? config.rooms.length : 0;
-  }
-
-  Map<String, String> _roomNamesMap() {
-    final config = context.read<ConfigCubit>().state;
-    if (config is! ConfigLoaded) return {};
-    return {for (final r in config.rooms) r.id: r.name};
-  }
-
   Map<String, String> _sourceNamesMap() {
     final config = context.read<ConfigCubit>().state;
     if (config is! ConfigLoaded) return {};
     return {for (final s in config.bookingSources) s.id: s.name};
+  }
+
+  String _roomName(BookingGroup g) {
+    final config = context.read<ConfigCubit>().state;
+    if (config is! ConfigLoaded) return g.roomId;
+    final idx = config.rooms.indexWhere((r) => r.id == g.roomId);
+    return idx >= 0 ? config.rooms[idx].name : g.roomId;
   }
 
   Future<void> _tapCard(BuildContext context, String groupId) async {
@@ -67,7 +62,7 @@ class _HomeScreenState extends State<HomeScreen> {
         extra: BookingWizardExtras(existingGroup: group),
       );
       if ((saved ?? false) && context.mounted) {
-        cubit.refresh(_today, _totalRooms());
+        cubit.refresh();
       }
     } catch (e) {
       messenger.showSnackBar(
@@ -98,36 +93,9 @@ class _HomeScreenState extends State<HomeScreen> {
             group: group, activeDestinations: activeDestinations),
       );
       if ((saved ?? false) && context.mounted) {
-        cubit.refresh(_today, _totalRooms());
+        cubit.refresh();
       }
     }
-  }
-
-  Future<void> _tapPaymentCard(
-      BuildContext context, BookingGroup group) async {
-    final cubit = context.read<HomeCubit>();
-    final configState = context.read<ConfigCubit>().state;
-    final activeDestinations = configState is ConfigLoaded
-        ? configState.paymentDestinations
-            .where((d) => d.isActive)
-            .toList()
-            .cast<PaymentDestination>()
-        : <PaymentDestination>[];
-    final saved = await context.push<bool>(
-      '/payment/update',
-      extra: PaymentUpdateExtras(
-          group: group, activeDestinations: activeDestinations),
-    );
-    if ((saved ?? false) && context.mounted) {
-      cubit.refresh(_today, _totalRooms());
-    }
-  }
-
-  String _greeting() {
-    final hour = DateTime.now().hour;
-    if (hour < 12) return 'Good morning';
-    if (hour < 17) return 'Good afternoon';
-    return 'Good evening';
   }
 
   @override
@@ -136,43 +104,49 @@ class _HomeScreenState extends State<HomeScreen> {
       create: (ctx) {
         final cubit = HomeCubit(HomeRepository());
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) cubit.load(_today, _totalRooms());
+          if (mounted) cubit.load(_today);
         });
         return cubit;
       },
       child: BlocListener<ConfigCubit, ConfigState>(
-        // Fires when config (re)loads — covers property switch + retry.
-        // Skip the initial load: HomeCubit starts as HomeInitial and the
-        // addPostFrameCallback above handles that first fetch.
         listenWhen: (_, curr) => curr is ConfigLoaded,
         listener: (context, _) {
           final cubit = context.read<HomeCubit>();
           if (cubit.state is! HomeInitial) {
-            cubit.refresh(_today, _totalRooms());
+            cubit.refresh();
           }
         },
         child: BlocBuilder<HomeCubit, HomeState>(
-        builder: (context, state) {
-          if (state is HomeInitial || state is HomeLoading) {
-            return const Scaffold(
-              body: Center(child: CircularProgressIndicator()),
-            );
-          }
-          if (state is HomeError) {
-            return _buildError(context, state.message);
-          }
-          if (state is HomeLoaded) {
-            return _buildLoaded(context, state);
-          }
-          return const Scaffold(body: SizedBox.shrink());
-        },
+          builder: (context, state) {
+            final colors = Theme.of(context).extension<AppColors>()!;
+
+            // Cache the latest loaded state for overlay-loading UX
+            if (state is HomeLoaded) _lastLoaded = state;
+
+            // First-ever load: full-screen spinner
+            if ((state is HomeInitial || state is HomeLoading) &&
+                _lastLoaded == null) {
+              return Scaffold(
+                backgroundColor: colors.background,
+                body: const Center(child: CircularProgressIndicator()),
+              );
+            }
+            if (state is HomeError) {
+              return _buildError(context, state.message, colors);
+            }
+
+            // Use last known loaded state for display (covers reloading too)
+            final display = state is HomeLoaded ? state : _lastLoaded!;
+            final isReloading = state is HomeLoading;
+            return _buildLoaded(context, display, colors,
+                isReloading: isReloading);
+          },
         ),
       ),
     );
   }
 
-  Widget _buildError(BuildContext context, String message) {
-    final colors = Theme.of(context).extension<AppColors>()!;
+  Widget _buildError(BuildContext context, String message, AppColors colors) {
     return Scaffold(
       backgroundColor: colors.background,
       body: Center(
@@ -190,8 +164,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const SizedBox(height: 16),
               FilledButton(
-                onPressed: () =>
-                    context.read<HomeCubit>().load(_today, _totalRooms()),
+                onPressed: () => context.read<HomeCubit>().load(_today),
                 child: const Text('Retry'),
               ),
             ],
@@ -201,253 +174,292 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildLoaded(BuildContext context, HomeLoaded state) {
-    final colors = Theme.of(context).extension<AppColors>()!;
-    final roomNames = _roomNamesMap();
+  Widget _buildLoaded(
+      BuildContext context, HomeLoaded state, AppColors colors,
+      {bool isReloading = false}) {
     final sourceNames = _sourceNamesMap();
-
-    String roomName(String id) => roomNames[id] ?? id;
     String? sourceName(String? id) => id != null ? sourceNames[id] : null;
-
-    final pendingTotal =
-        state.paymentPending.fold<double>(0, (sum, g) => sum + g.netAmount);
-    final pendingTotalStr = NumberFormat('#,##0.##').format(pendingTotal);
 
     return Scaffold(
       backgroundColor: colors.background,
       body: GestureDetector(
         onTap: _fabExpanded ? () => setState(() => _fabExpanded = false) : null,
         behavior: HitTestBehavior.translucent,
-        child: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: () async =>
-              context.read<HomeCubit>().refresh(_today, _totalRooms()),
-          child: CustomScrollView(
-            slivers: [
-              // Header
-              SliverToBoxAdapter(
-                child: _buildHeader(context, colors),
-              ),
-
-              // Section 1 — Occupancy
-              _buildSectionHeader(
-                colors: colors,
-                label: 'Occupancy today',
-                color: colors.textPrimary,
-              ),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                  child: OccupancyStrip(snapshot: state.occupancy),
-                ),
-              ),
-
-              // Section 2 — Check-outs
-              _buildSectionHeader(
-                colors: colors,
-                label: 'Check-outs today',
-                color: colors.danger,
-                count: state.checkOuts.isNotEmpty ? state.checkOuts.length : null,
-              ),
-              _bookingCardSliver(
-                context: context,
-                groups: state.checkOuts,
-                roomName: roomName,
-                sourceName: sourceName,
-                colors: colors,
-                emptyText: 'No check-outs today',
-              ),
-
-              // Section 3 — Check-ins
-              _buildSectionHeader(
-                colors: colors,
-                label: 'Check-ins today',
-                color: colors.success,
-                count: state.checkIns.isNotEmpty ? state.checkIns.length : null,
-              ),
-              _bookingCardSliver(
-                context: context,
-                groups: state.checkIns,
-                roomName: roomName,
-                sourceName: sourceName,
-                colors: colors,
-                emptyText: 'No check-ins today',
-              ),
-
-              // Section 4 — Upcoming
-              _buildSectionHeader(
-                colors: colors,
-                label: 'Upcoming check-ins',
-                color: colors.textPrimary,
-                subtitle: 'Next 3 days',
-              ),
-              if (state.upcoming.isEmpty)
-                _emptySliver(colors, 'No upcoming check-ins in the next 3 days')
-              else
-                SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      final entry = state.upcoming.entries.elementAt(index);
-                      return Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-                        child: UpcomingCard(
-                          date: entry.key,
-                          groups: entry.value,
-                          today: _today,
-                          resolveRoomName: roomName,
-                          resolveSourceName: sourceName,
-                          onTap: (id) => _tapCard(context, id),
-                        ),
-                      );
-                    },
-                    childCount: state.upcoming.length,
-                  ),
-                ),
-
-              // Section 5 — New today
-              _buildSectionHeader(
-                colors: colors,
-                label: 'New today',
-                color: colors.textPrimary,
-                count: state.newToday.isNotEmpty ? state.newToday.length : null,
-              ),
-              if (state.newToday.isEmpty)
-                _emptySliver(colors, 'No new bookings recorded today')
-              else
-                SliverToBoxAdapter(
-                  child: Container(
-                    margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: colors.surface,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: colors.border),
-                    ),
-                    child: Column(
-                      children: state.newToday.map((g) {
-                        return NewBookingRow(
-                          group: g,
-                          roomName: roomName(g.roomId),
-                          onTap: () => _tapCard(context, g.id),
-                        );
-                      }).toList(),
+        child: Stack(
+          children: [
+            SafeArea(
+              child: Column(
+                children: [
+                  // ── Date nav bar ──────────────────────────────────────
+                  _buildDateBar(context, state, colors),
+                  // ── Tab count cards ───────────────────────────────────
+                  _buildTabCards(context, state, colors),
+                  const SizedBox(height: 4),
+                  // ── Booking list ──────────────────────────────────────
+                  Expanded(
+                    child: RefreshIndicator(
+                      onRefresh: () async =>
+                          context.read<HomeCubit>().refresh(),
+                      child: state.activeList.isEmpty
+                          ? _buildEmptyList(state.selectedTab, colors)
+                          : _buildCardList(
+                              context, state, sourceName, colors),
                     ),
                   ),
+                ],
+              ),
+            ),
+            // Translucent loading overlay — shown during date switches /
+            // refreshes so the existing content stays visible.
+            if (isReloading)
+              Positioned.fill(
+                child: Container(
+                  color: Colors.black.withValues(alpha: 0.18),
+                  child: const Center(
+                    child: CircularProgressIndicator(),
+                  ),
                 ),
-
-              // Section 6 — Payment pending
-              _buildSectionHeader(
-                colors: colors,
-                label: 'Payment pending',
-                color: colors.warning,
-                count: state.paymentPending.isNotEmpty
-                    ? state.paymentPending.length
-                    : null,
-                subtitle: state.paymentPending.isNotEmpty
-                    ? '₹$pendingTotalStr due'
-                    : null,
               ),
-              _bookingCardSliver(
-                context: context,
-                groups: state.paymentPending,
-                roomName: roomName,
-                sourceName: sourceName,
-                colors: colors,
-                emptyText: 'All payments received',
-                cardTapOverride: _tapPaymentCard,
-              ),
-
-              // Bottom padding so FAB doesn't cover last card
-              const SliverToBoxAdapter(child: SizedBox(height: 88)),
-            ],
-          ),
-        ),
+          ],
         ),
       ),
       floatingActionButton: _buildFab(context, colors),
     );
   }
 
-  Widget _buildHeader(BuildContext context, AppColors colors) {
-    return BlocBuilder<AuthCubit, AuthState>(
-      builder: (_, authState) {
-        final auth =
-            authState is AuthAuthenticated ? authState : null;
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _greeting(),
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w700,
-                        color: colors.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      DateFormat('EEEE, d MMMM yyyy').format(_today),
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: colors.textSecondary,
-                      ),
-                    ),
-                  ],
+  Widget _buildCardList(
+    BuildContext context,
+    HomeLoaded state,
+    String? Function(String?) sourceName,
+    AppColors colors,
+  ) {
+    final items = state.activeList;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final w = constraints.maxWidth;
+        final cols = w >= 900 ? 3 : w >= 600 ? 2 : 1;
+
+        if (cols == 1) {
+          return ListView.builder(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 88),
+            itemCount: items.length,
+            itemBuilder: (context, index) {
+              final g = items[index];
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: OpsBookingCard(
+                  group: g,
+                  roomName: _roomName(g),
+                  sourceName: sourceName(g.bookingSourceId),
+                  onTap: () => _tapCard(context, g.id),
                 ),
+              );
+            },
+          );
+        }
+
+        // 2- or 3-column grid, centred with a sensible max-width
+        final maxWidth = cols == 3 ? 1100.0 : 800.0;
+        return Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: maxWidth),
+            child: GridView.builder(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 88),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: cols,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 8,
+                mainAxisExtent: 100,
               ),
-              if (auth != null) ...[
-                const SizedBox(width: 12),
-                GestureDetector(
-                  onTap: auth.properties.length > 1
-                      ? () => _showPropertySwitcher(context, auth)
-                      : null,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: colors.accentSubtle,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          auth.activeProperty.name,
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: colors.accent,
-                          ),
-                        ),
-                        if (auth.properties.length > 1) ...[
-                          const SizedBox(width: 4),
-                          Icon(
-                            Icons.swap_horiz_rounded,
-                            size: 13,
-                            color: colors.accent,
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ],
+              itemCount: items.length,
+              itemBuilder: (context, index) {
+                final g = items[index];
+                return OpsBookingCard(
+                  group: g,
+                  roomName: _roomName(g),
+                  sourceName: sourceName(g.bookingSourceId),
+                  onTap: () => _tapCard(context, g.id),
+                );
+              },
+            ),
           ),
         );
       },
     );
   }
 
-  void _showPropertySwitcher(
-      BuildContext context, AuthAuthenticated auth) {
+  Widget _buildDateBar(
+      BuildContext context, HomeLoaded state, AppColors colors) {
+    final dateLbl = DateFormat('EEE, d MMM yyyy').format(state.selectedDate);
+    final cubit = context.read<HomeCubit>();
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 10, 12, 6),
+      child: Row(
+        children: [
+          // Prev arrow
+          IconButton(
+            icon: const Icon(Icons.chevron_left_rounded),
+            color: colors.textSecondary,
+            onPressed: () => cubit
+                .selectDate(state.selectedDate.subtract(const Duration(days: 1))),
+          ),
+          // Date label — tap to open date picker
+          Expanded(
+            child: GestureDetector(
+              onTap: () async {
+                final picked = await showDatePicker(
+                  context: context,
+                  initialDate: state.selectedDate,
+                  firstDate: DateTime(2020),
+                  lastDate: DateTime.now().add(const Duration(days: 365)),
+                );
+                if (picked != null && context.mounted) {
+                  cubit.selectDate(
+                      DateTime(picked.year, picked.month, picked.day));
+                }
+              },
+              child: Text(
+                dateLbl,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: colors.textPrimary,
+                ),
+              ),
+            ),
+          ),
+          // Next arrow
+          IconButton(
+            icon: const Icon(Icons.chevron_right_rounded),
+            color: colors.textSecondary,
+            onPressed: () => cubit
+                .selectDate(state.selectedDate.add(const Duration(days: 1))),
+          ),
+          // Property pill
+          BlocBuilder<AuthCubit, AuthState>(
+            builder: (_, authState) {
+              final auth =
+                  authState is AuthAuthenticated ? authState : null;
+              if (auth == null) return const SizedBox.shrink();
+              return GestureDetector(
+                onTap: auth.properties.length > 1
+                    ? () => _showPropertySwitcher(context, auth)
+                    : null,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: colors.accentSubtle,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        auth.activeProperty.name,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: colors.accent,
+                        ),
+                      ),
+                      if (auth.properties.length > 1) ...[
+                        const SizedBox(width: 4),
+                        Icon(Icons.swap_horiz_rounded,
+                            size: 13, color: colors.accent),
+                      ],
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTabCards(
+      BuildContext context, HomeLoaded state, AppColors colors) {
+    // New Bookings first, In-House second (In-House is selected by default)
+    final tabs = [
+      (HomeTab.newBookings, 'New', state.newBookings.length),
+      (HomeTab.inHouse, 'In-House', state.inHouse.length),
+      (HomeTab.checkIns, 'Check-ins', state.checkIns.length),
+      (HomeTab.checkOuts, 'Check-outs', state.checkOuts.length),
+      (HomeTab.paymentsReceived, 'Paid', state.paymentsReceived.length),
+    ];
+
+    // Responsive: equal-width cards filling the row on mobile,
+    // centred max-width container on wide screens.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final wide = constraints.maxWidth >= 600;
+        final children = <Widget>[];
+        for (int i = 0; i < tabs.length; i++) {
+          final (tab, label, count) = tabs[i];
+          if (i > 0) children.add(const SizedBox(width: 8));
+          children.add(Expanded(
+            child: _TabCard(
+              label: label,
+              count: count,
+              selected: state.selectedTab == tab,
+              onTap: () => context.read<HomeCubit>().selectTab(tab),
+              colors: colors,
+              activeColor: tab == HomeTab.paymentsReceived
+                  ? colors.success
+                  : colors.accent,
+            ),
+          ));
+        }
+        final row = Row(children: children);
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          child: wide
+              ? Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 600),
+                    child: row,
+                  ),
+                )
+              : row,
+        );
+      },
+    );
+  }
+
+  Widget _buildEmptyList(HomeTab tab, AppColors colors) {
+    const labels = {
+      HomeTab.newBookings: 'No new bookings',
+      HomeTab.inHouse: 'No guests in-house',
+      HomeTab.checkIns: 'No check-ins',
+      HomeTab.checkOuts: 'No check-outs',
+      HomeTab.paymentsReceived: 'No payments received',
+    };
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 48),
+          child: Center(
+            child: Text(
+              labels[tab] ?? 'Nothing to show',
+              style: TextStyle(
+                fontSize: 13,
+                fontStyle: FontStyle.italic,
+                color: colors.textHint,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showPropertySwitcher(BuildContext context, AuthAuthenticated auth) {
     final colors = Theme.of(context).extension<AppColors>()!;
     showModalBottomSheet<void>(
       context: context,
@@ -504,108 +516,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  SliverToBoxAdapter _buildSectionHeader({
-    required AppColors colors,
-    required String label,
-    required Color color,
-    int? count,
-    String? subtitle,
-  }) {
-    return SliverToBoxAdapter(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
-        child: Row(
-          children: [
-            Text(
-              label.toUpperCase(),
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: color,
-                letterSpacing: 0.5,
-              ),
-            ),
-            if (count != null) ...[
-              const SizedBox(width: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  '$count',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color: color,
-                  ),
-                ),
-              ),
-            ],
-            if (subtitle != null) ...[
-              const Spacer(),
-              Text(
-                subtitle,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: colors.textSecondary,
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _bookingCardSliver({
-    required BuildContext context,
-    required List<BookingGroup> groups,
-    required String Function(String) roomName,
-    required String? Function(String?) sourceName,
-    required AppColors colors,
-    required String emptyText,
-    Future<void> Function(BuildContext, BookingGroup)? cardTapOverride,
-  }) {
-    if (groups.isEmpty) return _emptySliver(colors, emptyText);
-    return SliverList(
-      delegate: SliverChildBuilderDelegate(
-        (context, index) {
-          final g = groups[index];
-          return Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
-            child: BookingCard(
-              group: g,
-              roomName: roomName(g.roomId),
-              sourceName: sourceName(g.bookingSourceId),
-              onTap: cardTapOverride != null
-                  ? () => cardTapOverride(context, g)
-                  : () => _tapCard(context, g.id),
-            ),
-          );
-        },
-        childCount: groups.length,
-      ),
-    );
-  }
-
-  SliverToBoxAdapter _emptySliver(AppColors colors, String text) {
-    return SliverToBoxAdapter(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-        child: Text(
-          text,
-          style: TextStyle(
-            fontSize: 13,
-            fontStyle: FontStyle.italic,
-            color: colors.textHint,
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildFab(BuildContext context, AppColors colors) {
     final cubit = context.read<HomeCubit>();
     return Column(
@@ -629,8 +539,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ? () async {
                         setState(() => _fabExpanded = false);
                         if (!context.mounted) return;
-                        final result =
-                            await showStayFlexiSearchDialog(context);
+                        final result = await showStayFlexiSearchDialog(context);
                         if (result != null && context.mounted) {
                           final configState =
                               context.read<ConfigCubit>().state;
@@ -656,7 +565,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             extra: BookingWizardExtras(sfPrefill: prefill),
                           );
                           if ((saved ?? false) && context.mounted) {
-                            cubit.refresh(_today, _totalRooms());
+                            cubit.refresh();
                           }
                         }
                       }
@@ -682,10 +591,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     ? () async {
                         setState(() => _fabExpanded = false);
                         if (!context.mounted) return;
-                        final saved =
-                            await context.push<bool>('/booking/new');
+                        final saved = await context.push<bool>('/booking/new');
                         if ((saved ?? false) && context.mounted) {
-                          cubit.refresh(_today, _totalRooms());
+                          cubit.refresh();
                         }
                       }
                     : null,
@@ -732,6 +640,72 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
+
+// ── Tab Count Card ────────────────────────────────────────────────────────────
+
+class _TabCard extends StatelessWidget {
+  const _TabCard({
+    required this.label,
+    required this.count,
+    required this.selected,
+    required this.onTap,
+    required this.colors,
+    required this.activeColor,
+  });
+
+  final String label;
+  final int count;
+  final bool selected;
+  final VoidCallback onTap;
+  final AppColors colors;
+  final Color activeColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+        decoration: BoxDecoration(
+          color: selected
+              ? activeColor.withValues(alpha: 0.10)
+              : colors.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: selected ? activeColor : colors.border,
+            width: selected ? 1.5 : 1.0,
+          ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              '$count',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: selected ? activeColor : colors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w500,
+                color: selected ? activeColor : colors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── OTA Search Dialog ─────────────────────────────────────────────────────────
 
 class _OtaSearchDialog extends StatefulWidget {
   const _OtaSearchDialog({required this.activeDestinations});
@@ -853,6 +827,8 @@ class _OtaSearchDialogState extends State<_OtaSearchDialog> {
   }
 }
 
+// ── FAB Option ────────────────────────────────────────────────────────────────
+
 class _FabOption extends StatelessWidget {
   const _FabOption({
     required this.colors,
@@ -910,4 +886,3 @@ class _FabOption extends StatelessWidget {
     );
   }
 }
-

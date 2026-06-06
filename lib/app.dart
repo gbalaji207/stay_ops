@@ -27,6 +27,7 @@ import 'features/settings/settings_screen.dart';
 import 'features/auth/pin_screen.dart';
 import 'features/booking/wizard/booking_wizard_extras.dart';
 import 'features/booking/wizard/booking_wizard_screen.dart';
+import 'features/dashboard/screens/dashboard_screen.dart';
 import 'features/home/payment_update_extras.dart';
 import 'features/home/screens/payment_update_screen.dart';
 
@@ -56,8 +57,9 @@ GoRouter _buildRouter(AuthCubit authCubit) {
       if (auth is! AuthAuthenticated) return onPin ? null : '/pin';
       // Authenticated: block back-navigation to /pin
       if (onPin) return '/home';
-      // Settings guard
-      if (state.matchedLocation.startsWith('/settings')) {
+      // Settings + dashboard guard (owner only)
+      if (state.matchedLocation.startsWith('/settings') ||
+          state.matchedLocation.startsWith('/dashboard')) {
         if (auth.role != UserRole.owner) return '/home';
       }
       return null;
@@ -92,6 +94,10 @@ GoRouter _buildRouter(AuthCubit authCubit) {
           GoRoute(
             path: '/bookings',
             builder: (_, _) => const BookingsScreen(),
+          ),
+          GoRoute(
+            path: '/dashboard',
+            builder: (_, _) => const DashboardScreen(),
           ),
           GoRoute(
             path: '/reports',
@@ -202,13 +208,18 @@ class HomeShell extends StatelessWidget {
             onTap: (index) => _onTap(context, index, isOwner),
             items: [
               const BottomNavigationBarItem(
-                icon: Icon(Icons.dashboard_rounded),
+                icon: Icon(Icons.home_rounded),
                 label: 'Home',
               ),
               const BottomNavigationBarItem(
                 icon: Icon(Icons.calendar_month),
                 label: 'Bookings',
               ),
+              if (isOwner)
+                const BottomNavigationBarItem(
+                  icon: Icon(Icons.insights_rounded),
+                  label: 'Dashboard',
+                ),
               const BottomNavigationBarItem(
                 icon: Icon(Icons.bar_chart_rounded),
                 label: 'Reports',
@@ -229,15 +240,22 @@ class HomeShell extends StatelessWidget {
     if (location.startsWith('/home')) return 0;
     if (location.startsWith('/bookings') ||
         location.startsWith('/daily') ||
-        location.startsWith('/monthly')) return 1;
-    if (location.startsWith('/reports')) return 2;
-    if (isOwner && location.startsWith('/settings')) return 3;
+        location.startsWith('/monthly')) {
+      return 1;
+    }
+    if (isOwner && location.startsWith('/dashboard')) { return 2; }
+    if (isOwner && location.startsWith('/reports')) { return 3; }
+    if (!isOwner && location.startsWith('/reports')) { return 2; }
+    if (isOwner && location.startsWith('/settings')) { return 4; }
     return 0;
   }
 
   void _onTap(BuildContext context, int index, bool isOwner) {
-    final paths = ['/home', '/bookings', '/reports'];
-    if (isOwner) paths.add('/settings');
+    // Owner:  0=home, 1=bookings, 2=dashboard, 3=reports, 4=settings
+    // Staff:  0=home, 1=bookings, 2=reports
+    final paths = isOwner
+        ? ['/home', '/bookings', '/dashboard', '/reports', '/settings']
+        : ['/home', '/bookings', '/reports'];
     if (index < paths.length) context.go(paths[index]);
   }
 }

@@ -50,11 +50,15 @@ lib/
 │   │   └── widgets/  # stay_flexi_search_dialog
 │   ├── daily/        # bookings_screen (Week/Month toggle host), daily_screen (calendar grid),
 │   │                 # daily_cubit, daily_repository, calendar_booking, room_day_status, day_booking_row
+│   ├── dashboard/
+│   │   ├── models/       # dashboard_summary (DashboardSummary, SourceBreakdown, DestinationBreakdown)
+│   │   ├── screens/      # dashboard_screen
+│   │   ├── dashboard_cubit.dart, dashboard_state.dart, dashboard_repository.dart
 │   ├── home/
 │   │   ├── cubit/        # home_cubit, home_state
 │   │   ├── repository/   # home_repository
 │   │   ├── screens/      # home_screen, payment_update_screen
-│   │   ├── widgets/      # booking_card, occupancy_strip, upcoming_card, new_booking_row
+│   │   ├── widgets/      # ops_booking_card
 │   │   └── payment_update_extras.dart   # route carrier for /payment/update
 │   ├── monthly/      # monthly_screen, monthly_cubit, monthly_repository, month_booking_row, day_stats
 │   ├── reports/      # reports_screen, payment_report_screen, booking_type_report_screen,
@@ -135,6 +139,7 @@ pin_properties (pin_id FK, property_id FK, sort_order INT)  -- many-to-many
 | `DailyCubit` | Feature | Calendar timeline — `loadRange(anchor, visibleDays, rooms, sources)` emits `DailyRangeLoaded`; `fetchGroupForDay(bookingGroupId)` emits transient `DailyGroupFetched` then re-emits previous |
 | `MonthlyCubit` | Feature | Month bookings + heatmap stats |
 | `ReportsCubit` | Feature | Payment, Type, and Source report aggregation (client-side grouping via shared `_aggregateCategory` helper) |
+| `DashboardCubit` | Feature | Owner-only financial metrics. `load({period, customRange, roomId, totalRooms, sourceNames, destinationNames})` fetches two queries in parallel and aggregates client-side into `DashboardSummary`. |
 | `SettingsCubit` | Feature | Config CRUD. After every write → call `ConfigCubit.reload()`. |
 
 Rules:
@@ -166,11 +171,13 @@ redirect: (context, state) {
 
 `AuthLoading` is not `AuthAuthenticated`, so users stay on `/pin` during Supabase verification.
 
-Routes: `/pin`, `/home`, `/bookings`, `/reports`, `/reports/payment`, `/reports/booking-type`, `/reports/booking-source`, `/booking/new`, `/payment/update`, `/settings`, `/settings/rooms`, `/settings/booking-types`, `/settings/booking-sources`, `/settings/payment-destinations`.
+Routes: `/pin`, `/home`, `/bookings`, `/dashboard`, `/reports`, `/reports/payment`, `/reports/booking-type`, `/reports/booking-source`, `/booking/new`, `/payment/update`, `/settings`, `/settings/rooms`, `/settings/booking-types`, `/settings/booking-sources`, `/settings/payment-destinations`, `/settings/channel-manager`.
 
 `/booking/new` and `/payment/update` are top-level routes outside the `ShellRoute` (no bottom nav bar). Both return `bool` via `context.pop(true)` on save so the caller can refresh.
 
-Settings tab is **fully absent from the widget tree** for staff — not hidden, not greyed out. Bottom nav has 4 items for owner (Home, Bookings, Reports, Settings), 3 for staff (no Settings).
+Dashboard and Settings tabs are **fully absent from the widget tree** for staff — not hidden, not greyed out. Bottom nav has **5 items for owner** (Home · Bookings · Dashboard · Reports · Settings), **3 for staff** (Home · Bookings · Reports). Index mapping differs by role — always use `_indexFromLocation` / `_onTap` in `HomeShell` when modifying nav.
+
+Route guard redirects `/settings/*` and `/dashboard` to `/home` for staff.
 
 ---
 
@@ -323,6 +330,58 @@ Colors are accessed via `Theme.of(context).extension<AppColors>()`. Key tokens (
 
 ---
 
+## Home Screen
+
+Operational screen (staff + owner). Scoped to a single selected date with prev/next arrows; defaults to today. Content is a date selector bar → 5 equal-width count cards → booking list.
+
+### Count cards (`HomeTab` enum)
+| Tab | Query | `activeColor` |
+|---|---|---|
+| `newBookings` | `booking_date` falls on selected date (IST boundaries) | `colors.accent` |
+| `inHouse` | `check_in <= date AND check_out > date` | `colors.accent` |
+| `checkIns` | `check_in = date` | `colors.accent` |
+| `checkOuts` | `check_out = date` | `colors.accent` |
+| `paymentsReceived` | `payment_received = true AND payment_received_date = date` | `colors.success` |
+
+`inHouse` is selected by default. All 5 lists are fetched in parallel via `Future.wait` on every date change; tab switching is instant (`copyWith` only, no refetch).
+
+### Loading UX
+`_HomeScreenState` caches `_lastLoaded: HomeLoaded?`. When `HomeLoading` is emitted, the last loaded state is rendered under a translucent `Colors.black.withValues(alpha: 0.18)` overlay + centred spinner. Full-screen spinner only on the very first load when `_lastLoaded == null`.
+
+### Booking card (`OpsBookingCard`)
+Shows: customer name · `_SourceBadge` (OTA logo or accent pill) · room name · check-in datetime → check-out datetime. Source logos mapped from lowercased source name — asset map is defined directly in `_SourceBadge`, not imported from the calendar widget.
+
+### Responsive card grid
+`LayoutBuilder` breakpoints: `< 600 px` → 1-col `ListView`; `≥ 600 px` → 2-col `GridView` (max 800 px); `≥ 900 px` → 3-col `GridView` (max 1100 px). `mainAxisExtent: 100`.
+
+---
+
+## Dashboard Screen (owner only)
+
+Financial metrics screen at `/dashboard`. Not visible in staff bottom nav; route-guarded.
+
+### Filters
+- **Period** (`DashboardPeriod` enum): Today · Month to Date · Last Month · Year to Date · Custom. Default: **Today**. Custom opens `showDateRangePicker`; cubit and configState are captured before the `await` to satisfy `use_build_context_synchronously`.
+- **Room**: All Rooms or a specific room from `ConfigLoaded.rooms`. Shown in a `DraggableScrollableSheet` (`isScrollControlled: true`, `initialChildSize: 0.5`) so it doesn't overflow with many rooms.
+
+### Data flow
+`DashboardRepository` runs two parallel queries:
+1. `fetchDashboardGroups(range, roomId?)` — `booking_groups` where `check_in` ∈ range. Revenue belongs to stay start date.
+2. `fetchOccupiedRoomDays(range, roomId?)` — distinct `(room_id, booking_date)` pairs from `booking_days` (deduped client-side via `Set`).
+
+`DashboardCubit.load(...)` aggregates entirely client-side:
+- **Occupancy %** = occupied room-days / (rooms × days in period) × 100
+- **ADR** = gross revenue / total room nights sold (day-use counts as 1 night)
+- **RevPAR** = gross revenue / available room-days; when room filter applied, denominator = 1 × days
+- **Payments Collected** = sum of `actual_payment_amount ?? netAmount` where `payment_received = true`
+- **Pending Receivables** = sum of `netAmount` where `payment_received = false`
+- Source/destination breakdowns use `Map<id, Set<groupId>>` for unique booking counts, sorted by revenue desc with "Not specified" last
+
+### BlocProvider initialisation pattern
+`DashboardScreen.build` creates the `BlocProvider`. In the `create` callback, do **not** call `_load(ctx)` — `ctx` is above the provider and `ctx.read<DashboardCubit>()` will throw `ProviderNotFoundException`. Instead call `_loadWithCubit(cubit, configState: ...)` directly using the cubit reference and reading `ConfigCubit` from the `State`'s own `context` (guarded by `mounted`). This is the same pattern as `HomeScreen`.
+
+---
+
 ## Booking Wizard
 
 All booking entry and editing goes through the unified 4-step wizard at `/booking/new` (`BookingWizardScreen`). The launch mode is controlled by `BookingWizardExtras`:
@@ -389,12 +448,6 @@ Fields captured:
 The read-only reference card at the top (surface/border container) shows — in order — OTA ID (with clipboard copy), dates, source · type, customer name. Fields absent from the booking are silently omitted. Type and source names are resolved from `ConfigCubit` state via `context.read<ConfigCubit>()` in `build()`.
 
 `BookingRepository.updatePaymentDetails()` is a separate method that only PATCHes the five payment columns + `updated_at`. Do **not** route payment-only updates through `updateBookingGroup()`.
-
----
-
-## Home Screen — Amounts Displayed
-
-`BookingCard` (used in check-outs, check-ins, and payment pending sections) displays `group.netAmount` — not `totalAmount`. The "Payment pending" section header subtitle (`₹X due`) also sums `netAmount` across pending groups. This is intentional: `netAmount` is the actual receivable after commission and TDS/TCS deductions.
 
 ---
 
