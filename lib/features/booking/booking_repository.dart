@@ -181,6 +181,7 @@ class BookingRepository {
 
     // 4. PATCH booking_groups metadata
     await _client.from('booking_groups').update({
+      'room_id': input.roomId,
       'check_in': _fmt(input.checkIn),
       'check_out': _fmt(input.checkOut),
       'check_in_datetime': input.checkInDatetime.toUtc().toIso8601String(),
@@ -205,7 +206,7 @@ class BookingRepository {
     // 5. Recalculate per-night amount on all remaining active days
     await _client
         .from('booking_days')
-        .update({'amount': input.perNightAmount})
+        .update({'amount': input.perNightAmount, 'room_id': input.roomId})
         .eq('booking_group_id', groupId)
         .eq('is_active', true);
   }
