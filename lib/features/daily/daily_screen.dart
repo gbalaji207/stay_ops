@@ -23,11 +23,12 @@ class DailyScreen extends StatefulWidget {
   final Widget? headerToggle;
 
   @override
-  State<DailyScreen> createState() => _DailyScreenState();
+  DailyScreenState createState() => DailyScreenState();
 }
 
-class _DailyScreenState extends State<DailyScreen> {
+class DailyScreenState extends State<DailyScreen> {
   late DateTime _anchorDate;
+  late DailyCubit _cubit;
 
   /// Last successfully loaded state — kept so the grid skeleton stays visible
   /// while new data is loading (prevents full-screen spinner flash).
@@ -69,6 +70,18 @@ class _DailyScreenState extends State<DailyScreen> {
     _load(context);
   }
 
+  /// Reloads the current range using the cubit stored directly on this
+  /// state (bypasses context lookup, since callers such as [BookingsScreen]
+  /// sit above the internally-created [BlocProvider]).
+  void refreshData() {
+    _cubit.loadRange(
+      _anchorDate,
+      _visibleDays(context),
+      _rooms(context),
+      _sources(context),
+    );
+  }
+
   // ── build ──────────────────────────────────────────────────────────────────
 
   @override
@@ -76,6 +89,7 @@ class _DailyScreenState extends State<DailyScreen> {
     return BlocProvider<DailyCubit>(
       create: (ctx) {
         final cubit = DailyCubit(DailyRepository());
+        _cubit = cubit;
         // Call the cubit directly — ctx is the *parent* context (above the
         // BlocProvider) so ctx.read<DailyCubit>() would throw.
         WidgetsBinding.instance.addPostFrameCallback((_) {

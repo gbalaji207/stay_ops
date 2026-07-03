@@ -20,12 +20,13 @@ class MonthlyScreen extends StatefulWidget {
   final Widget? headerToggle;
 
   @override
-  State<MonthlyScreen> createState() => _MonthlyScreenState();
+  MonthlyScreenState createState() => MonthlyScreenState();
 }
 
-class _MonthlyScreenState extends State<MonthlyScreen> {
+class MonthlyScreenState extends State<MonthlyScreen> {
   late int _currentYear;
   late int _currentMonth;
+  late MonthlyCubit _cubit;
 
   @override
   void initState() {
@@ -64,11 +65,19 @@ class _MonthlyScreenState extends State<MonthlyScreen> {
     }
   }
 
+  /// Reloads the current month using the cubit stored directly on this
+  /// state (bypasses context lookup, since callers such as [BookingsScreen]
+  /// sit above the internally-created [BlocProvider]).
+  void refreshData() {
+    _cubit.load(_currentYear, _currentMonth, _rooms(context));
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocProvider<MonthlyCubit>(
       create: (ctx) {
         final cubit = MonthlyCubit(MonthlyRepository());
+        _cubit = cubit;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) cubit.load(_currentYear, _currentMonth, _rooms(ctx));
         });
