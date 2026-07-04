@@ -20,6 +20,25 @@ import '../config/config_cubit.dart';
 import 'reports_cubit.dart';
 import 'reports_repository.dart';
 
+enum _ReportPeriod { today, monthToDate, lastMonth, yearToDate, custom }
+
+extension _ReportPeriodLabel on _ReportPeriod {
+  String get label {
+    switch (this) {
+      case _ReportPeriod.today:
+        return 'Today';
+      case _ReportPeriod.monthToDate:
+        return 'Month to Date';
+      case _ReportPeriod.lastMonth:
+        return 'Last Month';
+      case _ReportPeriod.yearToDate:
+        return 'Year to Date';
+      case _ReportPeriod.custom:
+        return 'Custom';
+    }
+  }
+}
+
 class BookingsListReportScreen extends StatelessWidget {
   const BookingsListReportScreen({super.key});
 
@@ -43,35 +62,56 @@ class _BookingsListReportView extends StatefulWidget {
 }
 
 class _BookingsListReportViewState extends State<_BookingsListReportView> {
-  late DateTime _dateFrom;
-  late DateTime _dateTo;
-  String? _dateError;
+  _ReportPeriod _period = _ReportPeriod.monthToDate;
+  DateTimeRange? _customRange;
 
   List<String>? _roomIds;
   List<String>? _bookingTypeIds;
   List<String>? _bookingSourceIds;
   List<String>? _paymentDestinationIds;
 
-  static final _dateFmt   = DateFormat('d MMM yyyy');
+  static final _dateFmt   = DateFormat('d MMM');
   static final _amountFmt = NumberFormat('#,##0.##');
 
   @override
   void initState() {
     super.initState();
-    final now = DateTime.now();
-    _dateFrom = DateTime(now.year, now.month, 1);
-    _dateTo   = DateTime(now.year, now.month, now.day);
     _load();
   }
 
-  void _load() {
-    if (_dateFrom.isAfter(_dateTo)) {
-      setState(() => _dateError = 'End date must be after start date');
-      return;
+  DateTimeRange _computeRange(_ReportPeriod period, DateTimeRange? custom) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    switch (period) {
+      case _ReportPeriod.today:
+        return DateTimeRange(start: today, end: today);
+      case _ReportPeriod.monthToDate:
+        return DateTimeRange(
+          start: DateTime(today.year, today.month, 1),
+          end: today,
+        );
+      case _ReportPeriod.lastMonth:
+        final first = DateTime(today.year, today.month - 1, 1);
+        final last  = DateTime(today.year, today.month, 0);
+        return DateTimeRange(start: first, end: last);
+      case _ReportPeriod.yearToDate:
+        return DateTimeRange(
+          start: DateTime(today.year, 1, 1),
+          end: today,
+        );
+      case _ReportPeriod.custom:
+        return custom ??
+            DateTimeRange(
+              start: DateTime(today.year, today.month, 1),
+              end: today,
+            );
     }
-    setState(() => _dateError = null);
+  }
+
+  void _load() {
+    final dateRange = _computeRange(_period, _customRange);
     context.read<ReportsCubit>().loadBookingsListReport(
-          dateRange: DateTimeRange(start: _dateFrom, end: _dateTo),
+          dateRange: dateRange,
           roomIds: _roomIds,
           bookingTypeIds: _bookingTypeIds,
           bookingSourceIds: _bookingSourceIds,
@@ -79,17 +119,98 @@ class _BookingsListReportViewState extends State<_BookingsListReportView> {
         );
   }
 
-  Future<void> _pickDate(bool isFrom) async {
-    final initial = isFrom ? _dateFrom : _dateTo;
-    final picked = await showDatePicker(
+  void _showPeriodSheet(BuildContext context, AppColors colors) {
+    showModalBottomSheet<void>(
       context: context,
-      initialDate: initial,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+                child: Text(
+                  'Select Period',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: colors.textPrimary,
+                  ),
+                ),
+              ),
+              ..._ReportPeriod.values.map((p) => ListTile(
+                    title: Text(
+                      p.label,
+                      style: TextStyle(
+                        color: _period == p
+                            ? colors.accent
+                            : colors.textPrimary,
+                        fontWeight: _period == p
+                            ? FontWeight.w600
+                            : FontWeight.normal,
+                      ),
+                    ),
+                    trailing: _period == p
+                        ? Icon(Icons.check_rounded,
+                            color: colors.accent, size: 18)
+                        : null,
+                    onTap: () {
+                      Navigator.pop(context);
+                      if (p == _ReportPeriod.custom) {
+                        setState(() => _period = p);
+                        _pickCustomRange(context);
+                      } else {
+                        setState(() {
+                          _period = p;
+                          _customRange = null;
+                        });
+                        _load();
+                      }
+                    },
+                  )),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
     );
-    if (picked == null || !mounted) return;
-    setState(() => isFrom ? _dateFrom = picked : _dateTo = picked);
-    _load();
+  }
+
+  Future<void> _pickCustomRange(BuildContext context) async {
+    final colors = Theme.of(context).extension<AppColors>()!;
+    final now = DateTime.now();
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: now,
+      initialDateRange: _customRange ??
+          DateTimeRange(
+            start: DateTime(now.year, now.month, 1),
+            end: DateTime(now.year, now.month, now.day),
+          ),
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: Theme.of(context).colorScheme.copyWith(
+                primary: colors.accent,
+              ),
+        ),
+        child: child!,
+      ),
+    );
+    if (picked != null && mounted) {
+      setState(() {
+        _customRange = DateTimeRange(
+          start: DateTime(
+              picked.start.year, picked.start.month, picked.start.day),
+          end: DateTime(picked.end.year, picked.end.month, picked.end.day),
+        );
+      });
+      _load();
+    }
   }
 
   bool get _isDesktop =>
@@ -273,7 +394,7 @@ class _BookingsListReportViewState extends State<_BookingsListReportView> {
                 Padding(
                   padding: const EdgeInsets.only(bottom: 6),
                   child: Text(
-                    'PAYMENT DATE',
+                    'CHECK-IN DATE',
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w600,
@@ -285,24 +406,13 @@ class _BookingsListReportViewState extends State<_BookingsListReportView> {
                 Row(
                   children: [
                     Expanded(
-                      child: _DatePill(
-                        label: _dateFmt.format(_dateFrom),
+                      child: _PeriodChip(
                         colors: colors,
-                        onTap: () => _pickDate(true),
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: Text(
-                        '→',
-                        style: TextStyle(color: colors.textSecondary),
-                      ),
-                    ),
-                    Expanded(
-                      child: _DatePill(
-                        label: _dateFmt.format(_dateTo),
-                        colors: colors,
-                        onTap: () => _pickDate(false),
+                        label: _period == _ReportPeriod.custom &&
+                                _customRange != null
+                            ? '${_dateFmt.format(_customRange!.start)} – ${_dateFmt.format(_customRange!.end)}'
+                            : _period.label,
+                        onTap: () => _showPeriodSheet(context, colors),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -320,13 +430,6 @@ class _BookingsListReportViewState extends State<_BookingsListReportView> {
                     ),
                   ],
                 ),
-                if (_dateError != null) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    _dateError!,
-                    style: TextStyle(fontSize: 12, color: colors.danger),
-                  ),
-                ],
               ],
             ),
           ),
@@ -1140,15 +1243,15 @@ class _BookingCard extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 // Private shared widgets
 
-class _DatePill extends StatelessWidget {
-  const _DatePill({
-    required this.label,
+class _PeriodChip extends StatelessWidget {
+  const _PeriodChip({
     required this.colors,
+    required this.label,
     required this.onTap,
   });
 
-  final String label;
   final AppColors colors;
+  final String label;
   final VoidCallback onTap;
 
   @override
@@ -1156,16 +1259,30 @@ class _DatePill extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
         decoration: BoxDecoration(
           color: colors.background,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(10),
           border: Border.all(color: colors.border),
         ),
-        child: Text(
-          label,
-          style: TextStyle(fontSize: 13, color: colors.textPrimary),
-          textAlign: TextAlign.center,
+        child: Row(
+          children: [
+            Icon(Icons.date_range_rounded, size: 15, color: colors.accent),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: colors.textPrimary,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            Icon(Icons.arrow_drop_down_rounded,
+                size: 18, color: colors.textSecondary),
+          ],
         ),
       ),
     );

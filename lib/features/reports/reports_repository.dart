@@ -185,9 +185,8 @@ class ReportsRepository {
         )
         .eq('property_id', AppConstants.propertyId)
         .eq('is_active', true)
-        .eq('payment_received', true)
-        .gte('payment_received_date', _fmt(dateFrom))
-        .lte('payment_received_date', _fmt(dateTo));
+        .gte('check_in', _fmt(dateFrom))
+        .lte('check_in', _fmt(dateTo));
 
     if (roomIds != null && roomIds.isNotEmpty) {
       query = query.inFilter('room_id', roomIds);
